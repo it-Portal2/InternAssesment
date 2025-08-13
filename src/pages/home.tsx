@@ -23,7 +23,7 @@ const Home = () => {
               absolutely vital. Discover why!
             </p>
           </div>
-          <InternshipMotivationSlider />
+        <InternshipMotivationSlider direction="left" speed="slow" pauseOnHover={true} />
           <ModalApplicationForm
             open={showApplication}
             onOpenChange={setShowApplication}

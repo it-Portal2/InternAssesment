@@ -220,3 +220,25 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  .animate-scroll {
+    animation: scroll var(--animation-duration, 40s) linear infinite var(--animation-direction, forwards);
+  }
+
+  .line-clamp-4 {
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+@keyframes scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(calc(-100% - 1.5rem));
+  }
+}
