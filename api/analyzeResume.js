@@ -44,7 +44,7 @@ Return JSON in this exact format:
 Be precise and handle missing information gracefully by using appropriate defaults.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.0-flash',
       contents: [
         {
           parts: [
@@ -154,7 +154,7 @@ Return JSON in this exact format (generate between 6-12 questions as YOU see fit
 Generate the appropriate number of questions between 6-12 based on your assessment of this candidate's profile. Make them specific to their actual resume data and include questions from multiple categories listed above.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
