@@ -1,5 +1,5 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { GoogleGenAI } from "@google/genai";
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { GoogleGenAI } from '@google/genai';
 
 // Type definitions
 interface ResumeAnalysis {
@@ -14,6 +14,7 @@ interface InterviewQuestion {
   question: string;
   answer: string;
 }
+
 interface AIQuestionResponse {
   id: string;
   question: string;
@@ -30,13 +31,13 @@ const initializeGemini = (apiKey: string) => {
 
 // Resume analysis function
 async function analyzeResumeWithAI(
-  base64Data: string,
+  base64Data: string, 
   mimeType: string,
   apiKey: string
 ): Promise<ResumeAnalysis> {
   try {
     const ai = initializeGemini(apiKey);
-
+    
     const prompt = `You are an expert HR professional and resume analyzer. Analyze this resume document carefully and extract key information.
 
 IMPORTANT: Extract ONLY information that is explicitly present in the resume. Do not infer or assume information.
@@ -71,60 +72,53 @@ Return JSON in this exact format:
 Be precise and handle missing information gracefully by using appropriate defaults.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: 'gemini-1.5-flash',
       contents: [
         {
           parts: [
             {
               inlineData: {
                 data: base64Data,
-                mimeType: mimeType,
-              },
+                mimeType: mimeType
+              }
             },
-            { text: prompt },
-          ],
-        },
+            { text: prompt }
+          ]
+        }
       ],
       config: {
         responseMimeType: "application/json",
-        temperature: 0.1,
-      },
+        temperature: 0.1
+      }
     });
 
-    const analysis = JSON.parse(response.text || "{}");
-
+    const analysis = JSON.parse(response.text || '{}');
+    
     // Validate and set defaults
-    if (
-      !analysis.skills ||
-      !Array.isArray(analysis.skills) ||
-      analysis.skills.length === 0
-    ) {
+    if (!analysis.skills || !Array.isArray(analysis.skills) || analysis.skills.length === 0) {
       analysis.skills = ["General skills"];
     }
-
+    
     if (!analysis.experience) {
       analysis.experience = "0 years, Fresher/Entry level";
     }
-
+    
     if (!analysis.education) {
       analysis.education = "Not specified";
     }
-
+    
     if (!analysis.summary) {
-      analysis.summary =
-        "Candidate with available qualifications seeking opportunities.";
+      analysis.summary = "Candidate with available qualifications seeking opportunities.";
     }
-
+    
     return analysis as ResumeAnalysis;
+    
   } catch (error) {
-    throw new Error(
-      `Failed to analyze resume: ${
-        error instanceof Error ? error.message : "Unknown error"
-      }`
-    );
+    throw new Error(`Failed to analyze resume: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
+// Question generation function
 async function generateInterviewQuestions(
   resumeData: ResumeAnalysis,
   apiKey: string
@@ -170,26 +164,6 @@ ${resumeData.skills.join(", ")} (use ONLY these skills from their resume)
 
 STRICT RULE: Do not ask about technologies, frameworks, or skills that are NOT mentioned in their resume.
 
-EXAMPLES BY CATEGORY:
-
-BEHAVIORAL-FOCUSED (STAR Method):
-- "Tell me about a challenging project where you used [their specific skill]. Walk me through the situation, your task, the actions you took, and the results you achieved."
-
-COMPETENCY-BASED:
-- "Given your experience with [specific skill from resume], how would you approach [relevant scenario]?"
-
-SCENARIO-DRIVEN:
-- "You're working on a project using [their mentioned technology] and you encounter [realistic challenge]. How would you handle this situation?"
-
-LEADERSHIP & PROBLEM-SOLVING:
-- "Describe a time when you had to make a difficult decision involving [technology from their background]. What was your thought process?"
-
-COMPANY FIT:
-- "What interests you most about working with [technology from their resume] in a collaborative team environment?"
-
-CORE TECHNICAL KNOWLEDGE:
-- "Explain how you would [technical task] using [their specific skills]. What are the key considerations?"
-
 Return JSON in this exact format (generate between 6-12 questions as YOU see fit):
 {
   "questions": [
@@ -223,113 +197,97 @@ Return JSON in this exact format (generate between 6-12 questions as YOU see fit
 Generate the appropriate number of questions between 6-12 based on your assessment of this candidate's profile. Make them specific to their actual resume data and include questions from multiple categories listed above.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: 'gemini-1.5-flash',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
-        temperature: 0.7,
-      },
+        temperature: 0.7
+      }
     });
-
-    const data = JSON.parse(response.text || "{}") as AIGenerationResponse;
-
+    
+    const data = JSON.parse(response.text || '{}') as AIGenerationResponse;
+    
     if (!data.questions || !Array.isArray(data.questions)) {
       throw new Error("Invalid questions format in AI response");
     }
-
-    const questions = data.questions.map(
-      (q: AIQuestionResponse, index: number) => ({
-        id: q.id || `question_${index + 1}_${Date.now()}`,
-        question: q.question,
-        answer: "",
-      })
-    );
-
+    
+    const questions = data.questions.map((q: AIQuestionResponse, index: number) => ({
+      id: q.id || `question_${index + 1}_${Date.now()}`,
+      question: q.question,
+      answer: ""
+    }));
+    
     return questions.slice(0, Math.min(Math.max(questions.length, 6), 12));
+    
   } catch (error) {
-    throw new Error(
-      `Failed to generate questions: ${
-        error instanceof Error ? error.message : "Unknown error"
-      }`
-    );
+    throw new Error(`Failed to generate questions: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
-// Main Vercel Function Handler
+// Main handler function - ES module export
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Enable CORS
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET,OPTIONS,PATCH,DELETE,POST,PUT"
-  );
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version"
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
 
-  if (req.method === "OPTIONS") {
-    res.status(200).end();
-    return;
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
   }
 
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
     const { fileData, fileName, fileType, fileSize } = req.body;
 
+    console.log('Processing request for file:', fileName);
+
     // Input validation
     if (!fileData) {
-      return res.status(400).json({ error: "No file data provided" });
+      return res.status(400).json({ error: 'No file data provided' });
     }
 
-    if (fileType !== "application/pdf") {
-      return res.status(400).json({ error: "Only PDF files are supported" });
+    if (fileType !== 'application/pdf') {
+      return res.status(400).json({ error: 'Only PDF files are supported' });
     }
 
     if (fileSize > 5 * 1024 * 1024) {
-      return res.status(400).json({ error: "File too large (max 5MB)" });
+      return res.status(400).json({ error: 'File too large (max 5MB)' });
     }
 
     // Get API key from environment variables
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: "AI service not configured" });
+      console.error('GEMINI_API_KEY not found in environment variables');
+      return res.status(500).json({ error: 'AI service not configured' });
     }
 
-    console.log(
-      `Processing resume: ${fileName} (${Math.round(fileSize / 1024)} KB)`
-    );
+    console.log(`Processing resume: ${fileName} (${Math.round(fileSize / 1024)} KB)`);
 
     // Step 1: Analyze resume
-    const resumeAnalysis = await analyzeResumeWithAI(
-      fileData,
-      fileType,
-      apiKey
-    );
-    console.log(
-      "Resume analysis completed:",
-      resumeAnalysis.skills.length,
-      "skills found"
-    );
+    const resumeAnalysis = await analyzeResumeWithAI(fileData, fileType, apiKey);
+    console.log('Resume analysis completed:', resumeAnalysis.skills.length, 'skills found');
 
     // Step 2: Generate questions
     const questions = await generateInterviewQuestions(resumeAnalysis, apiKey);
-    console.log("Generated", questions.length, "questions");
+    console.log('Generated', questions.length, 'questions');
 
     return res.status(200).json({
       success: true,
       resumeAnalysis,
-      questions,
+      questions
     });
+
   } catch (error) {
-    console.error("Resume analysis failed:", error);
-    return res.status(500).json({
-      error:
-        error instanceof Error ? error.message : "Failed to process resume",
+    console.error('Resume analysis failed:', error);
+    return res.status(500).json({ 
+      error: error instanceof Error ? error.message : 'Failed to process resume'
     });
   }
 }
