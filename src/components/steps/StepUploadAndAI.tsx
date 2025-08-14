@@ -94,14 +94,14 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
       {/* Important Notice */}
       <Alert className="border-amber-200 bg-amber-50">
         <AlertTriangle className="h-4 w-4 text-amber-600" />
-        <AlertDescription className="text-amber-800">
+        <p className="text-amber-800">
           Upload your resume (PDF only, <strong>&lt; 5 MB</strong>). After
           upload, we will analyze your background and generate{" "}
           <strong>personalized interview questions</strong>. Please answer{" "}
           <strong>by yourself</strong>—{" "}
           <strong>no AI or external help</strong>.{" "}
           <strong>Malpractice leads to rejection.</strong>
-        </AlertDescription>
+        </p>
       </Alert>
 
       {/* ✅ UPDATED: FileUpload with proper integration */}
