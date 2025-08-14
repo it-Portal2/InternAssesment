@@ -59,23 +59,23 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
       // Update store with real API data
       setResumeAnalysis(result.resumeAnalysis);
       setAiQuestions(result.questions);
-      
+
       // Update form with real API data
       form.setValue("resumeAnalysis", result.resumeAnalysis);
       form.setValue("aiQuestions", result.questions);
-      
+
       setIsProcessingResume(false);
 
       toast.success("Resume processed successfully!", {
         description: `Generated ${result.questions.length} personalized questions based on your resume.`,
-        duration: 5000
+        duration: 5000,
       });
     } else {
       // Handle error case
       setIsProcessingResume(false);
       toast.error("Processing failed", {
         description: "Failed to process your resume. Please try again.",
-        duration: 6000
+        duration: 6000,
       });
     }
   };
@@ -98,8 +98,7 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
           Upload your resume (PDF only, <strong>&lt; 5 MB</strong>). After
           upload, we will analyze your background and generate{" "}
           <strong>personalized interview questions</strong>. Please answer{" "}
-          <strong>by yourself</strong>—{" "}
-          <strong>no AI or external help</strong>.{" "}
+          <strong>by yourself</strong>— <strong>no AI or external help</strong>.{" "}
           <strong>Malpractice leads to rejection.</strong>
         </p>
       </Alert>
@@ -108,22 +107,9 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
       <FileUpload
         file={uploadedFile}
         onFileSelect={handleFileSelect}
-        onAnalysisComplete={handleAnalysisComplete} 
+        onAnalysisComplete={handleAnalysisComplete}
         isProcessing={isProcessingResume}
       />
-
-      {/* Success notification with dynamic data */}
-      {resumeAnalysis && !isProcessingResume && (
-        <Alert className="border-green-200 bg-green-50">
-          <Bot className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-800">
-            Resume processed successfully! Generated <strong>{aiQuestions.length} personalized questions</strong> based on your{" "}
-            <strong>{resumeAnalysis.experience}</strong> experience in{" "}
-            <strong>{resumeAnalysis.skills.slice(0, 3).join(", ")}</strong>
-            {resumeAnalysis.skills.length > 3 && " and more"}.
-          </AlertDescription>
-        </Alert>
-      )}
 
       {/* AI Generated Questions with Voice Input */}
       {aiQuestions.length > 0 && (
@@ -138,26 +124,18 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
             </span>
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <p className="text-blue-800 text-sm">
-              <strong>📝 Instructions:</strong> These questions are tailored to your resume content including your{" "}
-              <strong>{resumeAnalysis?.skills.join(", ")}</strong> skills and{" "}
-              <strong>{resumeAnalysis?.experience}</strong>. Answer each question thoroughly using your own experience.
-            </p>
-          </div>
-
           <div className="space-y-6">
-            {aiQuestions.map((question, index) => (
-              <div key={question.id} className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
+            {aiQuestions.map((question) => (
+              <div
+                key={question.id}
+                className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm"
+              >
                 <FormField
                   control={form.control}
                   name={`responses.ai_${question.id}`}
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-base font-semibold text-foreground flex items-start space-x-3">
-                        <span className="bg-blue-600 text-white text-sm px-2 py-1 rounded-full min-w-[24px] text-center">
-                          {index + 1}
-                        </span>
                         <span className="flex-1">{question.question}</span>
                       </FormLabel>
                       <FormControl>
@@ -168,12 +146,13 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
                           rows={4}
                           language="en-US"
                           silenceTimeout={10000}
+                          className="mt-3" // ✅ Optional additional styling
                         />
                       </FormControl>
                       <FormMessage />
-                      
+
                       {/* Character count and guidance */}
-                      <div className="text-xs text-muted-foreground mt-2">
+                      <div className="text-xs text-muted-foreground mt-1">
                         {field.value?.length || 0} characters
                         {(field.value?.length || 0) < 100 && (
                           <span className="text-amber-600 ml-2">
@@ -187,27 +166,6 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
               </div>
             ))}
           </div>
-
-          {/* Summary of analysis */}
-          {resumeAnalysis && (
-            <div className="mt-8 p-4 bg-gray-50 rounded-lg border">
-              <h4 className="font-semibold text-gray-800 mb-2">📊 Resume Analysis Summary</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <strong>Experience Level:</strong> {resumeAnalysis.experience}
-                </div>
-                <div>
-                  <strong>Education:</strong> {resumeAnalysis.education}
-                </div>
-                <div className="md:col-span-2">
-                  <strong>Key Skills:</strong> {resumeAnalysis.skills.join(", ")}
-                </div>
-                <div className="md:col-span-2">
-                  <strong>Summary:</strong> {resumeAnalysis.summary}
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>

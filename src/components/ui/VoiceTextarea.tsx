@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,6 +10,7 @@ interface VoiceTextareaProps {
   rows?: number;
   language?: string;
   silenceTimeout?: number;
+  className?: string; 
 }
 
 export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
@@ -19,7 +19,8 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
   placeholder = "Type or speak your answer...",
   rows = 4,
   language = "en-US",
-  silenceTimeout = 10000
+  silenceTimeout = 10000,
+  className = ""
 }) => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -173,13 +174,14 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         rows={rows}
+        className={`resize-none w-full ${className}`} // ✅ Fixed wrapping
       />
     );
   }
 
   return (
-    <div className="space-y-2">
-      <div className="relative">
+    <div className="w-full space-y-2"> {/* ✅ Added w-full */}
+      <div className="relative w-full"> {/* ✅ Added w-full */}
         <Textarea
           value={value + (isListening && transcript ? (value ? ' ' : '') + transcript : '')}
           onChange={(e) => {
@@ -190,23 +192,36 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
           }}
           placeholder={placeholder}
           rows={rows}
-          className={
-            error 
+          className={`
+            resize-none 
+            w-full 
+            pr-12 
+            whitespace-pre-wrap 
+            word-wrap 
+            overflow-wrap-anywhere
+            ${error 
               ? "border-red-300 bg-red-50" 
               : isListening 
               ? "border-blue-300 bg-blue-50" 
               : ""
-          }
+            }
+            ${className}
+          `} 
           readOnly={isListening}
+          style={{ 
+            minHeight: `${rows * 1.5}rem`, 
+            maxHeight: '12rem', 
+            overflowY: 'auto' 
+          }}
         />
         
-        <div className="absolute bottom-4 right-2">
+        <div className="absolute bottom-3 right-3"> {/* ✅ Adjusted positioning */}
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={isListening ? stopListening : startListening}
-            className="h-8 w-8 p-0"
+            className="h-8 w-8 p-0 shadow-sm bg-white/80 backdrop-blur-sm hover:bg-white"
           >
             {isListening ? (
               <Square className="h-4 w-4 text-blue-600" />
