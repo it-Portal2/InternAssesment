@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Square } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import React, { useState, useEffect, useRef } from "react";
+import { Mic, Square } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface VoiceTextareaProps {
   value: string;
@@ -10,7 +10,7 @@ interface VoiceTextareaProps {
   rows?: number;
   language?: string;
   silenceTimeout?: number;
-  className?: string; 
+  className?: string;
 }
 
 export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
@@ -20,18 +20,30 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
   rows = 4,
   language = "en-US",
   silenceTimeout = 10000,
-  className = ""
+  className = "",
 }) => {
   const [isListening, setIsListening] = useState(false);
-  const [transcript, setTranscript] = useState('');
+  const [transcript, setTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
-  
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isListeningRef = useRef<boolean>(false);
 
-  const isSupported = typeof window !== 'undefined' && 
-    ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+  const isSupported =
+    typeof window !== "undefined" &&
+    ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
+
+  // Auto-resize textarea height based on content
+  const adjustTextareaHeight = () => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      const maxHeight = 200; // Maximum height in pixels
+      const newHeight = Math.min(textareaRef.current.scrollHeight, maxHeight);
+      textareaRef.current.style.height = `${newHeight}px`;
+    }
+  };
 
   // Clear silence timer
   const clearSilenceTimer = () => {
@@ -49,24 +61,24 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
         setIsListening(false);
         isListeningRef.current = false;
         recognitionRef.current.stop();
-        
-        // Finalize transcript
+
         if (transcript) {
-          const finalContent = value + (value ? ' ' : '') + transcript;
+          const finalContent = value + (value ? " " : "") + transcript;
           onChange(finalContent);
-          setTranscript('');
+          setTranscript("");
         }
       }
     }, silenceTimeout);
   };
 
-  // Initialize speech recognition for this specific textarea
+  // Initialize speech recognition
   useEffect(() => {
     if (!isSupported) return;
 
-    const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognitionConstructor =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognitionConstructor();
-    
+
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = language;
@@ -80,8 +92,8 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
     };
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let finalTranscript = '';
-      let interimTranscript = '';
+      let finalTranscript = "";
+      let interimTranscript = "";
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
@@ -92,17 +104,15 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
         }
       }
 
-      // Update transcript state for real-time display
       setTranscript(finalTranscript + interimTranscript);
-      
-      // Reset silence timer when speech is detected
+
       if (finalTranscript || interimTranscript) {
         startSilenceTimer();
       }
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      if (event.error !== 'aborted') {
+      if (event.error !== "aborted") {
         setError(`Speech recognition error: ${event.error}`);
       }
     };
@@ -111,12 +121,11 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
       setIsListening(false);
       isListeningRef.current = false;
       clearSilenceTimer();
-      
-      // Finalize transcript when recognition ends
+
       if (transcript) {
-        const finalContent = value + (value ? ' ' : '') + transcript;
+        const finalContent = value + (value ? " " : "") + transcript;
         onChange(finalContent);
-        setTranscript('');
+        setTranscript("");
       }
     };
 
@@ -130,20 +139,17 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
     };
   }, [isSupported, language, silenceTimeout]);
 
-  // Update transcript in real-time
+  // Adjust height when content changes
   useEffect(() => {
-    if (transcript && isListening) {
-      // Show real-time transcript but don't save to form yet
-      // It will be saved when recognition stops
-    }
-  }, [transcript, isListening]);
+    adjustTextareaHeight();
+  }, [value, transcript]);
 
   const startListening = () => {
     if (!recognitionRef.current || isListening) return;
-    
-    setTranscript('');
+
+    setTranscript("");
     setError(null);
-    
+
     try {
       recognitionRef.current.start();
     } catch (err) {
@@ -153,75 +159,102 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
 
   const stopListening = () => {
     if (!recognitionRef.current || !isListening) return;
-    
+
     clearSilenceTimer();
     setIsListening(false);
     isListeningRef.current = false;
     recognitionRef.current.stop();
-    
-    // Immediately finalize transcript
+
     if (transcript) {
-      const finalContent = value + (value ? ' ' : '') + transcript;
+      const finalContent = value + (value ? " " : "") + transcript;
       onChange(finalContent);
-      setTranscript('');
+      setTranscript("");
     }
   };
 
+  const displayValue =
+    value + (isListening && transcript ? (value ? " " : "") + transcript : "");
+
   if (!isSupported) {
     return (
-      <Textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        rows={rows}
-        className={`resize-none w-full ${className}`} // ✅ Fixed wrapping
-      />
+      <div className="w-full">
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          rows={rows}
+          className={cn(
+            "w-full p-3 border border-gray-300 rounded-md resize-none",
+            "focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+            "overflow-hidden break-words whitespace-pre-wrap",
+            className
+          )}
+          style={{
+            wordWrap: "break-word",
+            overflowWrap: "break-word",
+            whiteSpace: "pre-wrap",
+            lineHeight: "1.5",
+            minHeight: `${rows * 1.5}rem`,
+            maxHeight: "200px",
+            overflowY: "auto",
+          }}
+        />
+      </div>
     );
   }
 
   return (
-    <div className="w-full space-y-2"> {/* ✅ Added w-full */}
-      <div className="relative w-full"> {/* ✅ Added w-full */}
-        <Textarea
-          value={value + (isListening && transcript ? (value ? ' ' : '') + transcript : '')}
+    <div className="w-full space-y-2">
+      <div className="relative w-full">
+        <textarea
+          ref={textareaRef}
+          value={displayValue}
           onChange={(e) => {
-            // Only allow manual editing when not listening
             if (!isListening) {
               onChange(e.target.value);
             }
           }}
           placeholder={placeholder}
           rows={rows}
-          className={`
-            resize-none 
-            w-full 
-            pr-12 
-            whitespace-pre-wrap 
-            word-wrap 
-            overflow-wrap-anywhere
-            ${error 
-              ? "border-red-300 bg-red-50" 
-              : isListening 
-              ? "border-blue-300 bg-blue-50" 
-              : ""
-            }
-            ${className}
-          `} 
           readOnly={isListening}
-          style={{ 
-            minHeight: `${rows * 1.5}rem`, 
-            maxHeight: '12rem', 
-            overflowY: 'auto' 
+          className={cn(
+            // Base styles
+            "w-full p-3 pr-12 border rounded-md resize-none",
+            "focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+            // Text wrapping styles - CRITICAL
+            "break-words whitespace-pre-wrap overflow-hidden",
+            // State-based styling
+            error
+              ? "border-red-300 bg-red-50"
+              : isListening
+              ? "border-blue-300 bg-blue-50"
+              : "border-gray-300",
+            className
+          )}
+          style={{
+            // FORCE text wrapping with inline styles
+            wordWrap: "break-word",
+            overflowWrap: "break-word",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            lineHeight: "1.5",
+            minHeight: `${rows * 1.5}rem`,
+            maxHeight: "200px",
+            overflowY: "auto",
+            overflowX: "hidden", // Prevent horizontal scrolling
+            width: "100%",
+            boxSizing: "border-box",
           }}
         />
-        
-        <div className="absolute bottom-3 right-3"> {/* ✅ Adjusted positioning */}
+
+        <div className="absolute bottom-3 right-3">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={isListening ? stopListening : startListening}
-            className="h-8 w-8 p-0 shadow-sm bg-white/80 backdrop-blur-sm hover:bg-white"
+            className="h-8 w-8 p-0 shadow-sm bg-white/90 backdrop-blur-sm hover:bg-white"
           >
             {isListening ? (
               <Square className="h-4 w-4 text-blue-600" />
@@ -232,23 +265,18 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
         </div>
       </div>
 
-      {/* Status messages below textarea */}
-      <div className="min-h-[20px]">
-        {isListening && (
-          <div className="flex items-center space-x-1 text-blue-600 text-xs">
-            <div className="animate-pulse">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-            </div>
-            <span>Listening...</span>
+      {/* Status messages */}
+
+      {isListening && (
+        <div className="flex items-center space-x-1 text-blue-600 text-xs">
+          <div className="animate-pulse">
+            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
           </div>
-        )}
-        
-        {error && (
-          <div className="text-red-500 text-xs">
-            {error}
-          </div>
-        )}
-      </div>
+          <span>Listening...</span>
+        </div>
+      )}
+
+      {error && <div className="text-red-500 text-xs">{error}</div>}
     </div>
   );
 };

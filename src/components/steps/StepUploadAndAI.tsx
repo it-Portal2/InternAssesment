@@ -6,7 +6,6 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
 } from "@/components/ui/form";
 import { Alert} from "@/components/ui/alert";
 import FileUpload from "./FileUpload";
@@ -30,8 +29,6 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
     setIsProcessingResume,
   } = useApplicationStore();
 
-  // ✅ REMOVED: processResume mutation - FileUpload handles this directly now
-
   const handleFileSelect = (file: File | null) => {
     if (file) {
       setUploadedFile(file);
@@ -52,7 +49,6 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
     }
   };
 
-  // ✅ NEW: Handle analysis completion from FileUpload
   const handleAnalysisComplete = (result: AnalysisResult) => {
     if (result.success) {
       // Update store with real API data
@@ -102,7 +98,6 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
         </p>
       </Alert>
 
-      {/* ✅ UPDATED: FileUpload with proper integration */}
       <FileUpload
         file={uploadedFile}
         onFileSelect={handleFileSelect}
@@ -110,7 +105,6 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
         isProcessing={isProcessingResume}
       />
 
-      {/* AI Generated Questions with Voice Input */}
       {aiQuestions.length > 0 && (
         <div className="space-y-6">
           <div className="flex items-center space-x-3">
@@ -127,31 +121,31 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
             {aiQuestions.map((question) => (
               <div
                 key={question.id}
-                className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm"
+                className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm w-full max-w-full"
               >
                 <FormField
                   control={form.control}
                   name={`responses.ai_${question.id}`}
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-base font-semibold text-foreground flex items-start space-x-3">
+                    <FormItem className="w-full max-w-full">
+                      <FormLabel className="text-base font-semibold text-foreground flex items-start space-x-3 mb-1">
                         <span className="flex-1">{question.question}</span>
                       </FormLabel>
                       <FormControl>
-                        <VoiceTextarea
-                          value={field.value || ""}
-                          onChange={field.onChange}
-                          placeholder="Type or speak your answer... Be specific and use examples from your experience."
-                          rows={4}
-                          language="en-US"
-                          silenceTimeout={10000}
-                          className="mt-3" // ✅ Optional additional styling
-                        />
+                        <div className="w-full max-w-full overflow-hidden">
+                          <VoiceTextarea
+                            value={field.value || ""}
+                            onChange={field.onChange}
+                            placeholder="Type or speak your answer... Be specific and use examples from your experience."
+                            rows={4}
+                            language="en-US"
+                            silenceTimeout={10000}
+                            className="w-full max-w-full"
+                          />
+                        </div>
                       </FormControl>
-                      <FormMessage />
 
-                      {/* Character count and guidance */}
-                      <div className="text-xs text-muted-foreground mt-1">
+                      <div className="text-xs text-muted-foreground">
                         {field.value?.length || 0} characters
                         {(field.value?.length || 0) < 100 && (
                           <span className="text-amber-600 ml-2">

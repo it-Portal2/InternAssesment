@@ -71,7 +71,7 @@ export default function FileUpload({
       }
 
       const result = await response.json();
-      setProcessingStep('Processing complete!');
+      setProcessingStep('');
       
       // ✅ Show success toast with results
       toast.success("Resume analysis completed!", {
@@ -84,6 +84,8 @@ export default function FileUpload({
     } catch (error) {
       console.error('Error processing resume:', error);
       
+      setProcessingStep('');
+      
       // ✅ Show error toast instead of alert
       toast.error("Failed to process resume", {
         description: error instanceof Error ? error.message : 'An unexpected error occurred. Please try again.',
@@ -93,8 +95,6 @@ export default function FileUpload({
           onClick: () => processResume(selectedFile)
         }
       });
-      
-      setProcessingStep('');
     }
   };
 
@@ -118,6 +118,7 @@ export default function FileUpload({
           });
           return;
         }
+        
         toast.error("File upload failed", {
           description: rejection.errors[0]?.message || 'Please check your file and try again.',
           duration: 4000
@@ -154,15 +155,13 @@ export default function FileUpload({
     });
   };
 
-  // Show processing state
-  if (isProcessing || processingStep) {
+  if (isProcessing && processingStep) {
     return (
       <div className="flex flex-col items-center justify-center space-y-4 p-8">
         <img src="/resume-scan.gif" alt="Processing..." className="w-32" />
         <p className="text-lg font-medium text-blue-600">
-          {processingStep || 'Processing your resume...'}
+          {processingStep}
         </p>
-        {/* ✅ Optional: Show loading toast for long operations */}
         <div className="text-sm text-gray-500">
           This may take a few moments...
         </div>
@@ -170,8 +169,7 @@ export default function FileUpload({
     );
   }
 
-  // Show uploaded file
-  if (file && !processingStep) {
+  if (file && !processingStep && !isProcessing) {
     return (
       <div className={cn("space-y-4", className)}>
         <div className="p-4 border border-green-200 bg-green-50 rounded-lg">
