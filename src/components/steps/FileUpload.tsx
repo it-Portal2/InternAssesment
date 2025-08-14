@@ -52,7 +52,7 @@ export default function FileUpload({
       
       setProcessingStep('Analyzing resume with AI...');
       
-      const response = await fetch('https://intern-assessment-kappa.vercel.app/api/analyzeResume', {
+      const response = await fetch('/api/analyzeResume', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
