@@ -1,40 +1,12 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from '@google/genai';
 
-// Type definitions
-interface ResumeAnalysis {
-  skills: string[];
-  experience: string;
-  education: string;
-  summary: string;
-}
-
-interface InterviewQuestion {
-  id: string;
-  question: string;
-  answer: string;
-}
-
-interface AIQuestionResponse {
-  id: string;
-  question: string;
-}
-
-interface AIGenerationResponse {
-  questions: AIQuestionResponse[];
-}
-
 // Initialize Gemini AI
-const initializeGemini = (apiKey: string) => {
+const initializeGemini = (apiKey) => {
   return new GoogleGenAI({ apiKey });
 };
 
 // Resume analysis function
-async function analyzeResumeWithAI(
-  base64Data: string, 
-  mimeType: string,
-  apiKey: string
-): Promise<ResumeAnalysis> {
+async function analyzeResumeWithAI(base64Data, mimeType, apiKey) {
   try {
     const ai = initializeGemini(apiKey);
     
@@ -111,7 +83,7 @@ Be precise and handle missing information gracefully by using appropriate defaul
       analysis.summary = "Candidate with available qualifications seeking opportunities.";
     }
     
-    return analysis as ResumeAnalysis;
+    return analysis;
     
   } catch (error) {
     throw new Error(`Failed to analyze resume: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -119,10 +91,7 @@ Be precise and handle missing information gracefully by using appropriate defaul
 }
 
 // Question generation function
-async function generateInterviewQuestions(
-  resumeData: ResumeAnalysis,
-  apiKey: string
-): Promise<InterviewQuestion[]> {
+async function generateInterviewQuestions(resumeData, apiKey) {
   try {
     const ai = initializeGemini(apiKey);
 
@@ -146,18 +115,6 @@ QUESTION CATEGORIES TO INCLUDE:
 4. LEADERSHIP & PROBLEM-SOLVING: Assess critical thinking and decision-making abilities
 5. COMPANY FIT: Evaluate cultural alignment and growth mindset
 6. CORE TECHNICAL KNOWLEDGE: Deep technical questions on their specific skills
-
-DISTRIBUTION STRATEGY:
-- Include questions from multiple categories above
-- Weight technical questions (30-40%) based on their skill set
-- Balance behavioral and scenario questions based on experience level
-- Adjust complexity based on their seniority (Fresher vs Senior)
-
-STRICT REQUIREMENTS:
-1. ALL questions must be based ONLY on information from their resume
-2. NO generic questions - tailor to their specific background
-3. Focus on their actual skills, not assumed skills
-4. Use their actual experience level to determine question complexity
 
 Technical Questions Must Focus ONLY On:
 ${resumeData.skills.join(", ")} (use ONLY these skills from their resume)
@@ -205,13 +162,13 @@ Generate the appropriate number of questions between 6-12 based on your assessme
       }
     });
     
-    const data = JSON.parse(response.text || '{}') as AIGenerationResponse;
+    const data = JSON.parse(response.text || '{}');
     
     if (!data.questions || !Array.isArray(data.questions)) {
       throw new Error("Invalid questions format in AI response");
     }
     
-    const questions = data.questions.map((q: AIQuestionResponse, index: number) => ({
+    const questions = data.questions.map((q, index) => ({
       id: q.id || `question_${index + 1}_${Date.now()}`,
       question: q.question,
       answer: ""
@@ -224,8 +181,8 @@ Generate the appropriate number of questions between 6-12 based on your assessme
   }
 }
 
-// Main handler function - ES module export
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+// Main handler function - Pure ES module export
+export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');

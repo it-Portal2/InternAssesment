@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/analyzeResume.ts": {
+    "api/analyzeResume.js": {
       "memory": 1024,
       "maxDuration": 30
     }
