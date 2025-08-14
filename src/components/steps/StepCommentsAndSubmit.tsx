@@ -1,7 +1,9 @@
 import type { UseFormReturn } from "react-hook-form";
-import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
 import { Send } from "lucide-react";
 import { toast } from "sonner";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+
 import {
   FormControl,
   FormField,
@@ -13,8 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import type { InsertApplicationForm } from "@/lib/validation";
 import { useApplicationStore } from "@/store/useApplicationStore";
-
-
+import { db } from "@/Firebase";
 
 interface StepCommentsAndSubmitProps {
   form: UseFormReturn<InsertApplicationForm>;
@@ -26,51 +27,54 @@ export default function StepCommentsAndSubmit({
   onSubmitSuccess 
 }: StepCommentsAndSubmitProps) {
   const { aiQuestions, resumeAnalysis } = useApplicationStore();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const submitApplication = useMutation({
-    mutationFn: async (data: InsertApplicationForm) => {
-      // Simulate API submission
-      await new Promise(resolve => setTimeout(resolve, 1500));
+  const handleSubmit = async (data: InsertApplicationForm) => {
+    setIsSubmitting(true);
+    
+    try {
+      const aiQuestionsWithAnswers = aiQuestions.map((q) => ({
+        id: q.id,
+        question: q.question,
+        answer: form.getValues(`responses.ai_${q.id}`) || "",
+      }));
+
+      const applicationData = {
+        linkedin: data.linkedin || "",
+        additionalComments: data.additionalComments || "",
+        fullName: data.fullName || "",
+        email: data.email || "",
+        phone: data.phone || "",
+        stipendExpectation: data.stipendExpectation || "",
+        startDate: data.startDate || "",
+        weeklyCommitment: data.weeklyCommitment || "",
+        trialAccepted: data.trialAccepted || false,
+        aiQuestions: aiQuestionsWithAnswers,
+        applicationStatus: "Pending",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      const docRef = await addDoc(collection(db, "applications"), applicationData);
       
-      // TODO: replace with real API
-      // const response = await fetch("/api/applications", {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify(data),
-      // });
-      // return response.json();
+      console.log("Application saved with ID:", docRef.id);
       
-      // MOCK RESPONSE:
-      return { id: "mock-app-123", status: "submitted" };
-    },
-    onSuccess: (application) => {
       toast.success("Application submitted successfully!", {
-        description: "We'll review your application and get back to you soon."
+        description: `Application ID: ${docRef.id}. We'll review your application and get back to you soon.`,
+        duration: 6000
       });
-      onSubmitSuccess();
-    },
-    onError: (error) => {
-      toast.error("Submission failed", {
-        description: "There was an error submitting your application. Please try again."
-      });
-    },
-  });
-
-  const onSubmit = (data: InsertApplicationForm) => {
-    // Collect AI question answers
-    const aiQuestionsWithAnswers = aiQuestions.map((q) => ({
-      ...q,
-      answer: form.getValues(`responses.ai_${q.id}`) || "",
-    }));
-
-    const submissionData = {
-      ...data,
-      aiQuestions: aiQuestionsWithAnswers,
-    };
-
-      submitApplication.mutate(submissionData);   
-      console.log("done");
       
+      onSubmitSuccess();
+
+    } catch (error) {
+      console.error("Error submitting application:", error);
+      toast.error("Submission failed", {
+        description: "There was an error submitting your application. Please try again.",
+        duration: 6000
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const isSubmitDisabled = () => {
@@ -119,12 +123,12 @@ export default function StepCommentsAndSubmit({
       <div className="pt-6 border-t border-border">
         <Button
           type="button"
-          onClick={form.handleSubmit(onSubmit)}
-          disabled={submitApplication.isPending || isSubmitDisabled()}
+          onClick={form.handleSubmit(handleSubmit)}
+          disabled={isSubmitting || isSubmitDisabled()}
           className="w-full h-12 text-lg font-semibold"
           size="lg"
         >
-          {submitApplication.isPending ? (
+          {isSubmitting ? (
             <div className="flex items-center space-x-2">
               <div className="animate-spin rounded-full h-4 w-4 border-2 border-background border-t-transparent" />
               <span>Submitting...</span>

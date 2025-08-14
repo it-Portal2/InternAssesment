@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Square } from 'lucide-react';
+import { Mic, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -146,7 +146,7 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
     try {
       recognitionRef.current.start();
     } catch (err) {
-      setError('Failed to start speech recognition');
+      setError(`Failed to start speech recognition: ${err}`);
     }
   };
 

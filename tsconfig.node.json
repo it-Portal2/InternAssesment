@@ -6,8 +6,7 @@
     "module": "ESNext",
     "skipLibCheck": true,
 
-    /* Node.js compatibility for API functions */
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "verbatimModuleSyntax": false,

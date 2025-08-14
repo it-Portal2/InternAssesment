@@ -10,7 +10,11 @@ export interface AIQuestion {
   question: string;
   answer?: string;
 }
-
+export interface AnalysisResult {
+  success: boolean;
+  resumeAnalysis: ResumeAnalysis;
+  questions: AIQuestion[];
+}
 export interface InsertApplication {
   fullName: string;
   email: string;

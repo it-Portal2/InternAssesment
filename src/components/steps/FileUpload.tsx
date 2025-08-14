@@ -1,13 +1,17 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
-import { Upload, File, X, Loader2 } from "lucide-react";
+import type { FileRejection } from "react-dropzone";
+import { Upload, File, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatSize } from "@/utils/formatSize";
+import { toast } from "sonner"; 
+import type { AnalysisResult } from "@/types/application";
 
 interface FileUploadProps {
   file: File | null;
   onFileSelect: (file: File | null) => void;
+  onAnalysisComplete: (result: AnalysisResult) => void;
   isProcessing?: boolean;
   className?: string;
 }
@@ -15,23 +19,116 @@ interface FileUploadProps {
 export default function FileUpload({
   file,
   onFileSelect,
+  onAnalysisComplete,
   isProcessing = false,
   className,
 }: FileUploadProps) {
+  const [processingStep, setProcessingStep] = useState<string>('');
+
+  // Convert file to base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  // Call Vercel API
+  const processResume = async (selectedFile: File) => {
+    try {
+      // ✅ Show initial success toast
+      toast.success("File uploaded successfully!", {
+        description: `Processing ${selectedFile.name}...`
+      });
+
+      setProcessingStep('Converting PDF to base64...');
+      const base64Data = await fileToBase64(selectedFile);
+      
+      setProcessingStep('Analyzing resume with AI...');
+      
+      const response = await fetch('/api/analyzeResume', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fileData: base64Data,
+          fileName: selectedFile.name,
+          fileType: selectedFile.type,
+          fileSize: selectedFile.size
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      setProcessingStep('Processing complete!');
+      
+      // ✅ Show success toast with results
+      toast.success("Resume analysis completed!", {
+        description: `Generated ${result.questions?.length || 0} interview questions based on your experience.`,
+        duration: 5000
+      });
+      
+      onAnalysisComplete(result as AnalysisResult);
+      
+    } catch (error) {
+      console.error('Error processing resume:', error);
+      
+      // ✅ Show error toast instead of alert
+      toast.error("Failed to process resume", {
+        description: error instanceof Error ? error.message : 'An unexpected error occurred. Please try again.',
+        duration: 6000,
+        action: {
+          label: "Retry",
+          onClick: () => processResume(selectedFile)
+        }
+      });
+      
+      setProcessingStep('');
+    }
+  };
+
   const onDrop = useCallback(
-    (acceptedFiles: File[], rejectedFiles: any[]) => {
+    async (acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
       if (rejectedFiles.length > 0) {
         const rejection = rejectedFiles[0];
-        if (rejection.errors.some((e: any) => e.code === "file-too-large")) {
-          return; // Error handled by form validation
+        
+        if (rejection.errors.some((e) => e.code === "file-too-large")) {
+          toast.error("File too large", {
+            description: 'Maximum file size is 5MB. Please choose a smaller file.',
+            duration: 4000
+          });
+          return;
         }
-        if (rejection.errors.some((e: any) => e.code === "file-invalid-type")) {
-          return; // Error handled by form validation
+        
+        if (rejection.errors.some((e) => e.code === "file-invalid-type")) {
+          toast.error("Invalid file type", {
+            description: 'Only PDF files are supported. Please select a PDF resume.',
+            duration: 4000
+          });
+          return;
         }
+        toast.error("File upload failed", {
+          description: rejection.errors[0]?.message || 'Please check your file and try again.',
+          duration: 4000
+        });
+        return;
       }
 
       if (acceptedFiles.length > 0) {
-        onFileSelect(acceptedFiles[0]);
+        const selectedFile = acceptedFiles[0];
+        onFileSelect(selectedFile);
+        await processResume(selectedFile);
       }
     },
     [onFileSelect]
@@ -49,9 +146,32 @@ export default function FileUpload({
 
   const removeFile = () => {
     onFileSelect(null);
+    setProcessingStep('');
+    
+    toast.info("File removed", {
+      description: "You can upload a new resume to analyze.",
+      duration: 3000
+    });
   };
 
-  if (file && !isProcessing) {
+  // Show processing state
+  if (isProcessing || processingStep) {
+    return (
+      <div className="flex flex-col items-center justify-center space-y-4 p-8">
+        <img src="/resume-scan.gif" alt="Processing..." className="w-32" />
+        <p className="text-lg font-medium text-blue-600">
+          {processingStep || 'Processing your resume...'}
+        </p>
+        {/* ✅ Optional: Show loading toast for long operations */}
+        <div className="text-sm text-gray-500">
+          This may take a few moments...
+        </div>
+      </div>
+    );
+  }
+
+  // Show uploaded file
+  if (file && !processingStep) {
     return (
       <div className={cn("space-y-4", className)}>
         <div className="p-4 border border-green-200 bg-green-50 rounded-lg">
@@ -80,14 +200,7 @@ export default function FileUpload({
     );
   }
 
-  if (isProcessing) {
-    return (
-      <div className="flex justify-center">
-        <img src="/resume-scan.gif" alt="Loading..." className="w-32" />
-      </div>
-    );
-  }
-
+  // Show upload dropzone
   return (
     <div className={cn("space-y-4", className)}>
       <div
@@ -104,7 +217,6 @@ export default function FileUpload({
         <input {...getInputProps()} />
 
         <div className="space-y-6">
-          {/* Modern icon design */}
           <div className="relative mx-auto w-fit">
             <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto shadow-xl rotate-3 hover:rotate-0 transition-transform duration-300">
               <Upload className="h-12 w-12 text-white" />
@@ -126,8 +238,7 @@ export default function FileUpload({
               </p>
             </div>
 
-            {/* Modern requirements design */}
-            <div className=" rounded-xl p-4">
+            <div className="rounded-xl p-4">
               <div className="flex items-center justify-center space-x-8 text-sm">
                 <div className="flex items-center space-x-2 text-gray-600">
                   <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">

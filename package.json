@@ -22,6 +22,7 @@
     "@vercel/node": "^5.3.12",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "firebase": "^12.1.0",
     "lucide-react": "^0.539.0",
     "pdfjs-dist": "^5.4.54",
     "react": "^19.1.1",
