@@ -8,7 +8,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert} from "@/components/ui/alert";
 import FileUpload from "./FileUpload";
 import { useApplicationStore } from "@/store/useApplicationStore";
 import type { InsertApplicationForm } from "@/lib/validation";
@@ -22,7 +22,6 @@ interface StepUploadAndAIProps {
 export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
   const {
     uploadedFile,
-    resumeAnalysis,
     aiQuestions,
     isProcessingResume,
     setUploadedFile,
