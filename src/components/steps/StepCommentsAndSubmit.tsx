@@ -28,7 +28,6 @@ export default function StepCommentsAndSubmit({
 }: StepCommentsAndSubmitProps) {
   const { aiQuestions, resumeAnalysis } = useApplicationStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
-
   const handleSubmit = async (data: InsertApplicationForm) => {
     setIsSubmitting(true);
     
@@ -95,7 +94,7 @@ export default function StepCommentsAndSubmit({
 
   return (
     <div className="space-y-8">
-      <div className="text-center mb-8">
+      <div className="mb-8">
         <h2 className="text-2xl font-bold text-foreground mb-2">Additional Comments & Submit</h2>
         <p className="text-muted-foreground">Almost done! Any final thoughts?</p>
       </div>
