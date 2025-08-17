@@ -50,6 +50,7 @@ export default function StepCommentsAndSubmit({
         weeklyCommitment: data.weeklyCommitment || "",
         trialAccepted: data.trialAccepted || false,
         aiQuestions: aiQuestionsWithAnswers,
+        resumeAnalysisResult: resumeAnalysis,
         applicationStatus: "Pending",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
