@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Mic, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface VoiceTextareaProps {
   value: string;
@@ -34,6 +35,11 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
   const isSupported =
     typeof window !== "undefined" &&
     ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
+
+  const handleCopyPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    e.preventDefault();
+     toast.error("Copy and paste are disabled for this field");
+  };
 
   // Auto-resize textarea height based on content
   const adjustTextareaHeight = () => {
@@ -184,6 +190,9 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           rows={rows}
+          onCopy={handleCopyPaste}
+          onPaste={handleCopyPaste}
+          onCut={handleCopyPaste}
           className={cn(
             "w-full p-3 border border-gray-300 rounded-md resize-none",
             "focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
@@ -218,6 +227,9 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
           placeholder={placeholder}
           rows={rows}
           readOnly={isListening}
+          onCopy={handleCopyPaste}
+          onPaste={handleCopyPaste}
+          onCut={handleCopyPaste}
           className={cn(
             // Base styles
             "w-full p-3 pr-12 border rounded-md resize-none",
@@ -233,7 +245,6 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
             className
           )}
           style={{
-            // FORCE text wrapping with inline styles
             wordWrap: "break-word",
             overflowWrap: "break-word",
             whiteSpace: "pre-wrap",
@@ -242,7 +253,7 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
             minHeight: `${rows * 1.5}rem`,
             maxHeight: "200px",
             overflowY: "auto",
-            overflowX: "hidden", // Prevent horizontal scrolling
+            overflowX: "hidden", 
             width: "100%",
             boxSizing: "border-box",
           }}
