@@ -28,6 +28,7 @@ export default function StepCommentsAndSubmit({
 }: StepCommentsAndSubmitProps) {
   const { aiQuestions, resumeAnalysis } = useApplicationStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleSubmit = async (data: InsertApplicationForm) => {
     setIsSubmitting(true);
     
@@ -49,7 +50,17 @@ export default function StepCommentsAndSubmit({
         weeklyCommitment: data.weeklyCommitment || "",
         trialAccepted: data.trialAccepted || false,
         aiQuestions: aiQuestionsWithAnswers,
-        resumeAnalysisResult: resumeAnalysis,
+        resumeAnalysis: resumeAnalysis ? {
+          skills: resumeAnalysis.skills || [],
+          experience: resumeAnalysis.experience || "Not specified",
+          education: resumeAnalysis.education || "Not specified", 
+          summary: resumeAnalysis.summary || "Not specified"
+        } : {
+          skills: [],
+          experience: "Not specified",
+          education: "Not specified",
+          summary: "No resume analysis available"
+        },
         applicationStatus: "Pending",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
