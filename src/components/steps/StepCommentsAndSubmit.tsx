@@ -62,8 +62,7 @@ export default function StepCommentsAndSubmit({
           summary: "No resume analysis available"
         },
         applicationStatus: "Pending",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        createdAt: new Date(),
       };
 
       const docRef = await addDoc(collection(db, "applications"), applicationData);
