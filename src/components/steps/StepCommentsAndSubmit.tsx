@@ -2,7 +2,7 @@ import type { UseFormReturn } from "react-hook-form";
 import { useState } from "react";
 import { Send } from "lucide-react";
 import { toast } from "sonner";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc} from "firebase/firestore";
 
 import {
   FormControl,
