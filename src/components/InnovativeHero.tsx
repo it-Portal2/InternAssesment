@@ -48,7 +48,7 @@ export default function InnovativeHero({
             </h1>
             <p className="text-xl md:text-2xl text-gray-100 max-w-3xl mx-auto leading-relaxed drop-shadow-lg">
               Transform your career with AI-powered internship applications. Get
-              personalized interviews and instant offer letters.
+              personalized interviews based on your resume.
             </p>
 
             <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 mx-auto max-w-3xl border border-white border-opacity-20 shadow-xl">
