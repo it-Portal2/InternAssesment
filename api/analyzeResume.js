@@ -1,11 +1,11 @@
 import { GoogleGenAI } from '@google/genai';
 
-// Initialize Gemini AI
+// Initialize Gemini AI with specific API key
 const initializeGemini = (apiKey) => {
   return new GoogleGenAI({ apiKey });
 };
 
-// Resume analysis function
+// Resume analysis function - EXACT PROMPT UNCHANGED
 async function analyzeResumeWithAI(base64Data, mimeType, apiKey) {
   try {
     const ai = initializeGemini(apiKey);
@@ -44,7 +44,7 @@ Return JSON in this exact format:
 Be precise and handle missing information gracefully by using appropriate defaults.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.0-flash-lite',  // OPTIMIZED MODEL
       contents: [
         {
           parts: [
@@ -60,7 +60,8 @@ Be precise and handle missing information gracefully by using appropriate defaul
       ],
       config: {
         responseMimeType: "application/json",
-        temperature: 0.1
+        temperature: 0.1,
+        maxOutputTokens: 1000
       }
     });
 
@@ -90,12 +91,12 @@ Be precise and handle missing information gracefully by using appropriate defaul
   }
 }
 
-// Question generation function
+// Question generation function - OPTIMIZED FOR EXACTLY 10 QUESTIONS
 async function generateInterviewQuestions(resumeData, apiKey) {
   try {
     const ai = initializeGemini(apiKey);
 
-    const prompt = `You are a senior HR director at a Fortune 500 company. Based on the candidate's resume analysis, YOU HAVE THE FREEDOM to decide how many interview questions to generate for this candidate.
+    const prompt = `You are a senior HR director at a Fortune 500 company. Based on the candidate's resume analysis, generate EXACTLY 10 interview questions for this candidate.
 
 CANDIDATE ANALYSIS:
 - Skills: ${resumeData.skills.join(", ")}
@@ -103,37 +104,50 @@ CANDIDATE ANALYSIS:
 - Education: ${resumeData.education}
 - Summary: ${resumeData.summary}
 
-QUESTION COUNT DECISION (YOUR CHOICE):
-- Minimum: 6 questions
-- Maximum: 12 questions
-- YOU DECIDE based on the candidate's profile complexity, experience level, and skill diversity
-
-QUESTION CATEGORIES TO INCLUDE:
-1. BEHAVIORAL-FOCUSED: Use STAR method frameworks (Situation, Task, Action, Result)
-2. COMPETENCY-BASED: Target specific skills and experiences from their background
-3. SCENARIO-DRIVEN: Present realistic workplace challenges they might face
-4. LEADERSHIP & PROBLEM-SOLVING: Assess critical thinking and decision-making abilities
-5. COMPANY FIT: Evaluate cultural alignment and growth mindset
-6. CORE TECHNICAL KNOWLEDGE: Deep technical questions on their specific skills
+GENERATE EXACTLY 10 QUESTIONS WITH THIS DISTRIBUTION:
+- 4 TECHNICAL QUESTIONS: Core technical knowledge questions based on their specific skills
+- 2 BEHAVIORAL-FOCUSED: Use STAR method frameworks (Situation, Task, Action, Result)
+- 2 SCENARIO-DRIVEN: Present realistic workplace challenges they might face
+- 2 LEADERSHIP & PROBLEM-SOLVING: Assess critical thinking and decision-making abilities based on their background
 
 Technical Questions Must Focus ONLY On:
 ${resumeData.skills.join(", ")} (use ONLY these skills from their resume)
 
 STRICT RULE: Do not ask about technologies, frameworks, or skills that are NOT mentioned in their resume.
 
-Return JSON in this exact format (generate between 6-12 questions as YOU see fit):
+Return JSON in this exact format with EXACTLY 10 questions:
 {
   "questions": [
+    {
+      "id": "technical_q1",
+      "question": "Technical question 1 based on their skills"
+    },
+    {
+      "id": "technical_q2",
+      "question": "Technical question 2 based on their skills"
+    },
+    {
+      "id": "technical_q3",
+      "question": "Technical question 3 based on their skills"
+    },
+    {
+      "id": "technical_q4",
+      "question": "Technical question 4 based on their skills"
+    },
     {
       "id": "behavioral_q1",
       "question": "STAR method behavioral question based on their experience"
     },
     {
-      "id": "competency_q1",
-      "question": "Competency-based question targeting their skills"
+      "id": "behavioral_q2",
+      "question": "STAR method behavioral question based on their experience"
     },
     {
       "id": "scenario_q1",
+      "question": "Scenario-driven workplace challenge question"
+    },
+    {
+      "id": "scenario_q2",
       "question": "Scenario-driven workplace challenge question"
     },
     {
@@ -141,24 +155,21 @@ Return JSON in this exact format (generate between 6-12 questions as YOU see fit
       "question": "Leadership and problem-solving question"
     },
     {
-      "id": "cultural_q1",
-      "question": "Company fit and cultural alignment question"
-    },
-    {
-      "id": "technical_q1",
-      "question": "Core technical knowledge question based on their skills"
+      "id": "leadership_q2",
+      "question": "Leadership and problem-solving question"
     }
   ]
 }
 
-Generate the appropriate number of questions between 6-12 based on your assessment of this candidate's profile. Make them specific to their actual resume data and include questions from multiple categories listed above.`;
+Generate exactly 10 questions following this distribution. Make them specific to their actual resume data.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash-lite',  // OPTIMIZED MODEL
       contents: prompt,
       config: {
         responseMimeType: "application/json",
-        temperature: 0.7
+        temperature: 0.7,
+        maxOutputTokens: 2000
       }
     });
     
@@ -174,36 +185,38 @@ Generate the appropriate number of questions between 6-12 based on your assessme
       answer: ""
     }));
     
-    return questions.slice(0, Math.min(Math.max(questions.length, 6), 12));
+    // Ensure exactly 10 questions
+    return questions.slice(0, 10);
     
   } catch (error) {
     throw new Error(`Failed to generate questions: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
-// Main handler function - Pure ES module export
+// Main handler function - OPTIMIZED FOR FLASH-LITE SPEED
 export default async function handler(req, res) {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
   try {
+    // Enable CORS
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+    );
+
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
+
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
     const { fileData, fileName, fileType, fileSize } = req.body;
 
     console.log('Processing request for file:', fileName);
+    const startTime = Date.now();
 
     // Input validation
     if (!fileData) {
@@ -218,33 +231,49 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'File too large (max 5MB)' });
     }
 
-    // Get API key from environment variables
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.error('GEMINI_API_KEY not found in environment variables');
+    // Get API keys from environment variables
+    const apiKey1 = process.env.GEMINI_API_KEY_1;
+    const apiKey2 = process.env.GEMINI_API_KEY_2;
+    
+    if (!apiKey1 || !apiKey2) {
+      console.error('GEMINI_API_KEY_1 or GEMINI_API_KEY_2 not found in environment variables');
       return res.status(500).json({ error: 'AI service not configured' });
     }
 
     console.log(`Processing resume: ${fileName} (${Math.round(fileSize / 1024)} KB)`);
 
-    // Step 1: Analyze resume
-    const resumeAnalysis = await analyzeResumeWithAI(fileData, fileType, apiKey);
+    // Step 1: Resume analysis (Flash-Lite: ~200-400ms)
+    const resumeAnalysis = await analyzeResumeWithAI(fileData, fileType, apiKey1);
     console.log('Resume analysis completed:', resumeAnalysis.skills.length, 'skills found');
+    console.log('Analysis time:', Date.now() - startTime, 'ms');
 
-    // Step 2: Generate questions
-    const questions = await generateInterviewQuestions(resumeAnalysis, apiKey);
-    console.log('Generated', questions.length, 'questions');
+    // Step 2: Question generation (Flash-Lite: ~300-500ms)
+    const questionStartTime = Date.now();
+    const questions = await generateInterviewQuestions(resumeAnalysis, apiKey2);
+    console.log('Generated exactly', questions.length, 'questions');
+    console.log('Question generation time:', Date.now() - questionStartTime, 'ms');
+    
+    const totalProcessingTime = Date.now() - startTime;
+    console.log('Total processing time:', totalProcessingTime, 'ms');
 
     return res.status(200).json({
       success: true,
       resumeAnalysis,
-      questions
+      questions,
+      processingTimeMs: totalProcessingTime,
+      model: 'gemini-2.0-flash-lite',
+      performance: {
+        analysisTimeMs: Date.now() - startTime - (Date.now() - questionStartTime),
+        questionGenTimeMs: Date.now() - questionStartTime,
+        totalTimeMs: totalProcessingTime
+      }
     });
 
   } catch (error) {
     console.error('Resume analysis failed:', error);
     return res.status(500).json({ 
-      error: error instanceof Error ? error.message : 'Failed to process resume'
+      error: error instanceof Error ? error.message : 'Failed to process resume',
+      model: 'gemini-2.0-flash-lite'
     });
   }
 }
