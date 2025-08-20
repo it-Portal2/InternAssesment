@@ -2,7 +2,13 @@
   "functions": {
     "api/analyzeResume.js": {
       "memory": 1024,
-      "maxDuration": 30
+      "maxDuration": 60
     }
-  }
+  },
+  "rewrites": [
+        {
+          "source": "/(.*)",
+          "destination": "/index.html"
+        }
+      ]
 }
