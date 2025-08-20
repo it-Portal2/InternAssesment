@@ -14,8 +14,8 @@ import StepPredefinedQuestions from "./StepPredefinedQuestions";
 import StepUploadAndAI from "./StepUploadAndAI";
 import StepCommentsAndSubmit from "./StepCommentsAndSubmit";
 import { Stepper } from "../ui/Stepper";
-import { useEffect, useState, useCallback } from "react";
-import { toast } from "sonner";
+import { useEffect, useState } from "react";
+import { toast } from "sonner"; // Import toast
 
 interface ModalApplicationFormProps {
   open: boolean;
@@ -45,11 +45,10 @@ export default function ModalApplicationForm({
   } = useApplicationStore();
 
   const [isNextDisabled, setIsNextDisabled] = useState(true);
-  const [stepValidationErrors, setStepValidationErrors] = useState<string[]>([]);
 
   const form = useForm<InsertApplicationForm>({
     resolver: zodResolver(insertApplicationSchema),
-    mode: "onChange",
+    mode: "onChange", // Enable real-time validation
     defaultValues: {
       fullName: "",
       email: "",
@@ -71,183 +70,207 @@ export default function ModalApplicationForm({
     },
   });
 
-  // Watch specific fields instead of all values
-  const fullName = form.watch("fullName");
-  const email = form.watch("email");
-  const phone = form.watch("phone");
-  const linkedin = form.watch("linkedin");
-  const startDate = form.watch("startDate");
-  const weeklyCommitment = form.watch("weeklyCommitment");
-  const trialAccepted = form.watch("trialAccepted");
-  const stipendExpectation = form.watch("stipendExpectation");
-  const responses = form.watch("responses");
+  // Watch form values for real-time validation
+  const watchedValues = form.watch();
+  const formErrors = form.formState.errors;
 
-  // Get form errors once
-  const { errors: formErrors } = form.formState;
+  // Update Next button state based on current step validation
+  useEffect(() => {
+    const checkStepValidation = () => {
+      switch (currentStep) {
+        case 1: {
+          const step1Valid = validateStep1();
+          setIsNextDisabled(!step1Valid);
+          break;
+        }
+        case 2: {
+          const step2Valid = validateStep2();
+          setIsNextDisabled(!step2Valid);
+          break;
+        }
+        case 3: {
+          const step3Valid = validateStep3();
+          setIsNextDisabled(!step3Valid);
+          break;
+        }
+        default: {
+          setIsNextDisabled(false);
+          break;
+        }
+      }
+    };
 
-  // Memoize validation functions
-  const validateStep1 = useCallback((): { valid: boolean; errors: string[] } => {
-    const errors: string[] = [];
+    checkStepValidation();
+  }, [watchedValues, currentStep, resumeAnalysis, aiQuestions, formErrors]);
 
-    if (!fullName?.trim()) errors.push("Full name is required");
-    if (!email?.trim()) errors.push("Email address is required");
-    if (!phone?.trim()) errors.push("Phone number is required");
+  // Step 1 validation
+  const validateStep1 = () => {
+    const { fullName, email, phone } = watchedValues;
 
-    if (formErrors.fullName) errors.push(formErrors.fullName.message || "Invalid full name");
-    if (formErrors.email) errors.push(formErrors.email.message || "Invalid email format");
-    if (formErrors.phone) errors.push(formErrors.phone.message || "Invalid phone number");
-    if (formErrors.linkedin) errors.push(formErrors.linkedin.message || "Invalid LinkedIn URL");
-
-    return { valid: errors.length === 0, errors };
-  }, [fullName, email, phone, formErrors.fullName, formErrors.email, formErrors.phone, formErrors.linkedin]);
-
-  const validateStep2 = useCallback((): { valid: boolean; errors: string[] } => {
-    const errors: string[] = [];
-
-    if (!startDate?.trim()) errors.push("Start date preference is required");
-    if (!weeklyCommitment?.trim()) errors.push("Weekly commitment is required");
-    if (!trialAccepted?.trim()) errors.push("Trial period response is required");
-    if (!stipendExpectation?.trim()) errors.push("Stipend expectation is required");
-
-    if (formErrors.startDate) errors.push(formErrors.startDate.message || "Invalid start date");
-    if (formErrors.weeklyCommitment) errors.push(formErrors.weeklyCommitment.message || "Invalid weekly commitment");
-    if (formErrors.trialAccepted) errors.push(formErrors.trialAccepted.message || "Invalid trial response");
-    if (formErrors.stipendExpectation) errors.push(formErrors.stipendExpectation.message || "Invalid stipend expectation");
-
-    return { valid: errors.length === 0, errors };
-  }, [startDate, weeklyCommitment, trialAccepted, stipendExpectation, formErrors.startDate, formErrors.weeklyCommitment, formErrors.trialAccepted, formErrors.stipendExpectation]);
-
-  const validateStep3 = useCallback((): { valid: boolean; errors: string[] } => {
-    const errors: string[] = [];
-
-    if (!resumeAnalysis) {
-      errors.push("Please upload and analyze your resume");
-      return { valid: false, errors };
+    // Check if required fields are filled
+    if (!fullName?.trim() || !email?.trim() || !phone?.trim()) {
+      return false;
     }
+
+    // Check for validation errors
+    if (formErrors.fullName || formErrors.email || formErrors.phone) {
+      return false;
+    }
+
+    return true;
+  };
+
+  // Step 2 validation
+  const validateStep2 = () => {
+    const { startDate, weeklyCommitment, trialAccepted, stipendExpectation } =
+      watchedValues;
+
+    if (
+      !startDate?.trim() ||
+      !weeklyCommitment?.trim() ||
+      !trialAccepted?.trim() ||
+      !stipendExpectation?.trim()
+    ) {
+      return false;
+    }
+
+    if (
+      formErrors.startDate ||
+      formErrors.weeklyCommitment ||
+      formErrors.trialAccepted ||
+      formErrors.stipendExpectation
+    ) {
+      return false;
+    }
+
+    return true;
+  };
+
+  // Step 3 validation
+  const validateStep3 = () => {
+    // Check if resume analysis exists
+    if (!resumeAnalysis) {
+      return false;
+    }
+
+    // If there are AI questions, check if all are answered
+    if (aiQuestions.length > 0) {
+      return aiQuestions.every((q) => {
+        const answer = watchedValues.responses?.[`ai_${q.id}`];
+        return answer && answer.trim() !== "";
+      });
+    }
+
+    return true;
+  };
+
+  // Handle next button with validation and toast messages
+  // Handle next button with validation and toast messages
+  const handleNext = async () => {
+    let isValid = false;
+    let errorMessage = "";
+
+    switch (currentStep) {
+      case 1: {
+        // Wrap the case content in curly braces
+        const step1Result = await form.trigger([
+          "fullName",
+          "email",
+          "phone",
+          "linkedin",
+        ]);
+        if (step1Result && validateStep1()) {
+          isValid = true;
+        } else {
+          errorMessage = getStep1ErrorMessage();
+        }
+        break;
+      }
+
+      case 2: {
+        const step2Result = await form.trigger([
+          "startDate",
+          "weeklyCommitment",
+          "trialAccepted",
+          "stipendExpectation",
+        ]);
+        if (step2Result && validateStep2()) {
+          isValid = true;
+        } else {
+          errorMessage = getStep2ErrorMessage();
+        }
+        break;
+      }
+
+      case 3: {
+        if (validateStep3()) {
+          isValid = true;
+        } else {
+          errorMessage = getStep3ErrorMessage();
+        }
+        break;
+      }
+
+      default: {
+        isValid = true;
+        break;
+      }
+    }
+
+    if (isValid) {
+      next();
+    } else {
+      toast.error(errorMessage);
+    }
+  };
+
+  // Error message helpers
+  const getStep1ErrorMessage = () => {
+    if (formErrors.fullName)
+      return formErrors.fullName.message || "Full name is required";
+    if (formErrors.email)
+      return formErrors.email.message || "Valid email is required";
+    if (formErrors.phone)
+      return formErrors.phone.message || "Valid phone number is required";
+    if (formErrors.linkedin)
+      return formErrors.linkedin.message || "Valid LinkedIn URL is required";
+
+    const { fullName, email, phone } = watchedValues;
+    if (!fullName?.trim()) return "Full name is required";
+    if (!email?.trim()) return "Email is required";
+    if (!phone?.trim()) return "Phone number is required";
+
+    return "Please fill in all required fields correctly";
+  };
+
+  const getStep2ErrorMessage = () => {
+    const { startDate, weeklyCommitment, trialAccepted, stipendExpectation } =
+      watchedValues;
+
+    if (!stipendExpectation?.trim()) return "Stipend expectation is required";
+    if (!startDate?.trim()) return "Start date is required";
+    if (!weeklyCommitment?.trim()) return "Weekly commitment is required";
+    if (!trialAccepted?.trim())
+      return "Please indicate if you accept the trial period";
+
+    return "Please fill in all required fields";
+  };
+
+  const getStep3ErrorMessage = () => {
+    if (!resumeAnalysis) return "Please upload and analyze your resume first";
 
     if (aiQuestions.length > 0) {
       const unansweredQuestions = aiQuestions.filter((q) => {
-        const answer = responses?.[`ai_${q.id}`];
+        const answer = watchedValues.responses?.[`ai_${q.id}`];
         return !answer || answer.trim() === "";
       });
 
       if (unansweredQuestions.length > 0) {
-        errors.push(`${unansweredQuestions.length} AI questions still need answers`);
-      }
-
-      // Check for answers that are too short
-      const shortAnswers = aiQuestions.filter((q) => {
-        const answer = responses?.[`ai_${q.id}`];
-        return answer && answer.trim().length > 0 && answer.trim().length < 50;
-      });
-
-      if (shortAnswers.length > 0) {
-        errors.push(`${shortAnswers.length} answers could be more detailed (aim for 50+ characters)`);
+        return "Please answer all AI-generated questions";
       }
     }
 
-    return { valid: errors.length === 0, errors };
-  }, [resumeAnalysis, aiQuestions, responses]);
-
-  // Memoize step validation check
-  const checkStepValidation = useCallback(() => {
-    let errors: string[] = [];
-    let isValid = false;
-
-    switch (currentStep) {
-      case 1: {
-        const validation = validateStep1();
-        isValid = validation.valid;
-        errors = validation.errors;
-        break;
-      }
-      case 2: {
-        const validation = validateStep2();
-        isValid = validation.valid;
-        errors = validation.errors;
-        break;
-      }
-      case 3: {
-        const validation = validateStep3();
-        isValid = validation.valid;
-        errors = validation.errors;
-        break;
-      }
-      default: {
-        isValid = true;
-        errors = [];
-        break;
-      }
-    }
-
-    setIsNextDisabled(!isValid);
-    setStepValidationErrors(errors);
-  }, [currentStep, validateStep1, validateStep2, validateStep3]);
-
-  // Enhanced step validation with optimized dependencies
-  useEffect(() => {
-    checkStepValidation();
-  }, [checkStepValidation]);
-
-  // Enhanced next button handler without loading toast
-  const handleNext = async () => {
-    try {
-      let triggerResult = true;
-      let validationResult: { valid: boolean; errors: string[] } = { valid: true, errors: [] };
-
-      switch (currentStep) {
-        case 1: {
-          triggerResult = await form.trigger(["fullName", "email", "phone", "linkedin"]);
-          validationResult = validateStep1();
-          break;
-        }
-        case 2: {
-          triggerResult = await form.trigger([
-            "startDate",
-            "weeklyCommitment", 
-            "trialAccepted",
-            "stipendExpectation"
-          ]);
-          validationResult = validateStep2();
-          break;
-        }
-        case 3: {
-          validationResult = validateStep3();
-          break;
-        }
-      }
-
-      if (triggerResult && validationResult.valid) {
-        toast.success("Step completed successfully!", {
-          description: "Moving to the next step",
-          duration: 2000
-        });
-        next();
-      } else {
-        const primaryError = validationResult.errors[0] || "Please complete all required fields";
-        const additionalErrors = validationResult.errors.slice(1, 3); // Show max 3 more errors
-        
-        toast.error(`Step ${currentStep} incomplete`, {
-          description: primaryError + (additionalErrors.length > 0 ? ` and ${additionalErrors.length} more issue${additionalErrors.length > 1 ? 's' : ''}` : ''),
-          duration: 5000,
-          action: {
-            label: "View Details",
-            onClick: () => {
-              toast.info("Validation Details", {
-                description: validationResult.errors.join(" • "),
-                duration: 8000
-              });
-            }
-          }
-        });
-      }
-    } catch (error) {
-      console.log("Error validating step:", error);
-      toast.error("Validation failed", {
-        description: "An error occurred while validating. Please try again.",
-        duration: 4000
-      });
-    }
+    return "Please complete all requirements for this step";
   };
 
   // Prevent body scroll when modal is open
@@ -276,15 +299,6 @@ export default function ModalApplicationForm({
   }, [open]);
 
   const handleClose = () => {
-    const hasFormData = [fullName, email, phone, linkedin, startDate, weeklyCommitment, trialAccepted, stipendExpectation].some(value => value?.trim());
-    
-    if (currentStep > 1 || hasFormData) {
-      toast.info("Form closed", {
-        description: "Your progress has been saved. You can continue where you left off.",
-        duration: 3000
-      });
-    }
-    
     onOpenChange(false);
     setTimeout(() => {
       reset();
@@ -368,23 +382,6 @@ export default function ModalApplicationForm({
                   currentStep={currentStep}
                   completedSteps={getCompletedSteps()}
                 />
-                
-                {/* Step validation feedback */}
-                {stepValidationErrors.length > 0 && currentStep < 4 && (
-                  <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                    <p className="text-sm text-amber-800 font-medium mb-1">
-                      Complete the following to continue:
-                    </p>
-                    <ul className="text-xs text-amber-700 space-y-1">
-                      {stepValidationErrors.slice(0, 3).map((error, index) => (
-                        <li key={index}>• {error}</li>
-                      ))}
-                      {stepValidationErrors.length > 3 && (
-                        <li>• ... and {stepValidationErrors.length - 3} more</li>
-                      )}
-                    </ul>
-                  </div>
-                )}
               </div>
             )}
 
@@ -399,12 +396,7 @@ export default function ModalApplicationForm({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    prev();
-                    toast.info("Returned to previous step", {
-                      duration: 2000
-                    });
-                  }}
+                  onClick={prev}
                   disabled={currentStep === 1}
                   className="flex items-center justify-center space-x-2 w-full sm:w-auto order-2 sm:order-1 border-blue-600 text-blue-600 hover:bg-blue-50 disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent transition-colors duration-200"
                 >
