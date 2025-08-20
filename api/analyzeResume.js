@@ -106,7 +106,7 @@ CANDIDATE ANALYSIS:
 
 GENERATE EXACTLY 10 QUESTIONS WITH THIS DISTRIBUTION:
 - 4 TECHNICAL QUESTIONS: Core technical knowledge questions based on their specific skills
-- 2 BEHAVIORAL-FOCUSED: Use STAR method frameworks (Situation, Task, Action, Result)
+- 2 BEHAVIORAL-FOCUSED: Use STAR method frameworks (Situation, Task, Action, Result) to assess past experiences and behaviors but in the question dont mention user that it is start method or answer the question in star method 
 - 2 SCENARIO-DRIVEN: Present realistic workplace challenges they might face
 - 2 LEADERSHIP & PROBLEM-SOLVING: Assess critical thinking and decision-making abilities based on their background
 
@@ -136,11 +136,11 @@ Return JSON in this exact format with EXACTLY 10 questions:
     },
     {
       "id": "behavioral_q1",
-      "question": "STAR method behavioral question based on their experience"
+      "question": "Behavioral question based on their experience"
     },
     {
       "id": "behavioral_q2",
-      "question": "STAR method behavioral question based on their experience"
+      "question": "Behavioral question based on their experience"
     },
     {
       "id": "scenario_q1",
