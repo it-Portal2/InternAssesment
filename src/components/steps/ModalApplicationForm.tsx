@@ -14,7 +14,7 @@ import StepPredefinedQuestions from "./StepPredefinedQuestions";
 import StepUploadAndAI from "./StepUploadAndAI";
 import StepCommentsAndSubmit from "./StepCommentsAndSubmit";
 import { Stepper } from "../ui/Stepper";
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 
 interface ModalApplicationFormProps {
