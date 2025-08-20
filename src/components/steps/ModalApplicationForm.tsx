@@ -14,7 +14,7 @@ import StepPredefinedQuestions from "./StepPredefinedQuestions";
 import StepUploadAndAI from "./StepUploadAndAI";
 import StepCommentsAndSubmit from "./StepCommentsAndSubmit";
 import { Stepper } from "../ui/Stepper";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { toast } from "sonner";
 
 interface ModalApplicationFormProps {
@@ -71,52 +71,23 @@ export default function ModalApplicationForm({
     },
   });
 
-  const watchedValues = form.watch();
-  const formErrors = form.formState.errors;
+  // Watch specific fields instead of all values
+  const fullName = form.watch("fullName");
+  const email = form.watch("email");
+  const phone = form.watch("phone");
+  const linkedin = form.watch("linkedin");
+  const startDate = form.watch("startDate");
+  const weeklyCommitment = form.watch("weeklyCommitment");
+  const trialAccepted = form.watch("trialAccepted");
+  const stipendExpectation = form.watch("stipendExpectation");
+  const responses = form.watch("responses");
 
-  // Enhanced step validation with detailed error messages
-  useEffect(() => {
-    const checkStepValidation = () => {
-      let errors: string[] = [];
-      let isValid = false;
+  // Get form errors once
+  const { errors: formErrors } = form.formState;
 
-      switch (currentStep) {
-        case 1: {
-          const validation = validateStep1();
-          isValid = validation.valid;
-          errors = validation.errors;
-          break;
-        }
-        case 2: {
-          const validation = validateStep2();
-          isValid = validation.valid;
-          errors = validation.errors;
-          break;
-        }
-        case 3: {
-          const validation = validateStep3();
-          isValid = validation.valid;
-          errors = validation.errors;
-          break;
-        }
-        default: {
-          isValid = true;
-          errors = [];
-          break;
-        }
-      }
-
-      setIsNextDisabled(!isValid);
-      setStepValidationErrors(errors);
-    };
-
-    checkStepValidation();
-  }, [watchedValues, currentStep, resumeAnalysis, aiQuestions, formErrors]);
-
-  // Enhanced validation functions with detailed error reporting
-  const validateStep1 = (): { valid: boolean; errors: string[] } => {
+  // Memoize validation functions
+  const validateStep1 = useCallback((): { valid: boolean; errors: string[] } => {
     const errors: string[] = [];
-    const { fullName, email, phone } = watchedValues;
 
     if (!fullName?.trim()) errors.push("Full name is required");
     if (!email?.trim()) errors.push("Email address is required");
@@ -128,11 +99,10 @@ export default function ModalApplicationForm({
     if (formErrors.linkedin) errors.push(formErrors.linkedin.message || "Invalid LinkedIn URL");
 
     return { valid: errors.length === 0, errors };
-  };
+  }, [fullName, email, phone, formErrors.fullName, formErrors.email, formErrors.phone, formErrors.linkedin]);
 
-  const validateStep2 = (): { valid: boolean; errors: string[] } => {
+  const validateStep2 = useCallback((): { valid: boolean; errors: string[] } => {
     const errors: string[] = [];
-    const { startDate, weeklyCommitment, trialAccepted, stipendExpectation } = watchedValues;
 
     if (!startDate?.trim()) errors.push("Start date preference is required");
     if (!weeklyCommitment?.trim()) errors.push("Weekly commitment is required");
@@ -145,9 +115,9 @@ export default function ModalApplicationForm({
     if (formErrors.stipendExpectation) errors.push(formErrors.stipendExpectation.message || "Invalid stipend expectation");
 
     return { valid: errors.length === 0, errors };
-  };
+  }, [startDate, weeklyCommitment, trialAccepted, stipendExpectation, formErrors.startDate, formErrors.weeklyCommitment, formErrors.trialAccepted, formErrors.stipendExpectation]);
 
-  const validateStep3 = (): { valid: boolean; errors: string[] } => {
+  const validateStep3 = useCallback((): { valid: boolean; errors: string[] } => {
     const errors: string[] = [];
 
     if (!resumeAnalysis) {
@@ -157,7 +127,7 @@ export default function ModalApplicationForm({
 
     if (aiQuestions.length > 0) {
       const unansweredQuestions = aiQuestions.filter((q) => {
-        const answer = watchedValues.responses?.[`ai_${q.id}`];
+        const answer = responses?.[`ai_${q.id}`];
         return !answer || answer.trim() === "";
       });
 
@@ -167,7 +137,7 @@ export default function ModalApplicationForm({
 
       // Check for answers that are too short
       const shortAnswers = aiQuestions.filter((q) => {
-        const answer = watchedValues.responses?.[`ai_${q.id}`];
+        const answer = responses?.[`ai_${q.id}`];
         return answer && answer.trim().length > 0 && answer.trim().length < 50;
       });
 
@@ -177,17 +147,53 @@ export default function ModalApplicationForm({
     }
 
     return { valid: errors.length === 0, errors };
-  };
+  }, [resumeAnalysis, aiQuestions, responses]);
 
-  // Enhanced next button handler with better user feedback
+  // Memoize step validation check
+  const checkStepValidation = useCallback(() => {
+    let errors: string[] = [];
+    let isValid = false;
+
+    switch (currentStep) {
+      case 1: {
+        const validation = validateStep1();
+        isValid = validation.valid;
+        errors = validation.errors;
+        break;
+      }
+      case 2: {
+        const validation = validateStep2();
+        isValid = validation.valid;
+        errors = validation.errors;
+        break;
+      }
+      case 3: {
+        const validation = validateStep3();
+        isValid = validation.valid;
+        errors = validation.errors;
+        break;
+      }
+      default: {
+        isValid = true;
+        errors = [];
+        break;
+      }
+    }
+
+    setIsNextDisabled(!isValid);
+    setStepValidationErrors(errors);
+  }, [currentStep, validateStep1, validateStep2, validateStep3]);
+
+  // Enhanced step validation with optimized dependencies
+  useEffect(() => {
+    checkStepValidation();
+  }, [checkStepValidation]);
+
+  // Enhanced next button handler without loading toast
   const handleNext = async () => {
     try {
       let triggerResult = true;
       let validationResult: { valid: boolean; errors: string[] } = { valid: true, errors: [] };
-
-      const loadingToast = toast.loading("Validating step...", {
-        description: "Checking your information"
-      });
 
       switch (currentStep) {
         case 1: {
@@ -210,8 +216,6 @@ export default function ModalApplicationForm({
           break;
         }
       }
-
-      toast.dismiss(loadingToast);
 
       if (triggerResult && validationResult.valid) {
         toast.success("Step completed successfully!", {
@@ -272,7 +276,9 @@ export default function ModalApplicationForm({
   }, [open]);
 
   const handleClose = () => {
-    if (currentStep > 1 || Object.keys(watchedValues).some(key => watchedValues[key as keyof typeof watchedValues])) {
+    const hasFormData = [fullName, email, phone, linkedin, startDate, weeklyCommitment, trialAccepted, stipendExpectation].some(value => value?.trim());
+    
+    if (currentStep > 1 || hasFormData) {
       toast.info("Form closed", {
         description: "Your progress has been saved. You can continue where you left off.",
         duration: 3000
