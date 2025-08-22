@@ -351,6 +351,35 @@ export default function ModalApplicationForm({
     }
   };
 
+  // Add this useEffect in your ModalApplicationForm component
+  useEffect(() => {
+    // Get persisted data from Zustand store
+    const { applicationData } = useApplicationStore.getState();
+
+    // Populate form with persisted data
+    if (applicationData) {
+      form.reset({
+        fullName: applicationData.fullName || "",
+        email: applicationData.email || "",
+        phone: applicationData.phone || "",
+        linkedin: applicationData.linkedin || "",
+        stipendExpectation: applicationData.stipendExpectation || "",
+        startDate: applicationData.startDate || "",
+        weeklyCommitment: applicationData.weeklyCommitment || "10-15",
+        trialAccepted: applicationData.trialAccepted || "yes",
+        additionalComments: applicationData.additionalComments || "",
+        responses: applicationData.responses || {},
+        resumeAnalysis: resumeAnalysis || {
+          skills: [],
+          experience: "",
+          education: "",
+          summary: "",
+        },
+        aiQuestions: aiQuestions || [],
+      });
+    }
+  }, [form, resumeAnalysis, aiQuestions]); // Add dependencies
+
   if (!open) return null;
 
   return (

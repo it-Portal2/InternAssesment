@@ -27,6 +27,7 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
     setResumeAnalysis,
     setAiQuestions,
     setIsProcessingResume,
+    updateStep3Response
   } = useApplicationStore();
 
   const handleFileSelect = (file: File | null) => {
@@ -135,7 +136,11 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
                         <div className="w-full max-w-full overflow-hidden">
                           <VoiceTextarea
                             value={field.value || ""}
-                            onChange={field.onChange}
+                            onChange={(value) => {
+                              field.onChange(value);
+                              // Also update Zustand store
+                              updateStep3Response(question.id, value);
+                            }}
                             placeholder="Type or speak your answer... Be specific and use examples from your experience."
                             rows={4}
                             language="en-US"

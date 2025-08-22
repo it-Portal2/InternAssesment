@@ -17,6 +17,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { InsertApplicationForm } from "@/lib/validation";
+import { useApplicationStore } from "@/store/useApplicationStore";
+import { useEffect } from "react";
 
 
 interface StepPredefinedQuestionsProps {
@@ -24,7 +26,20 @@ interface StepPredefinedQuestionsProps {
 }
 
 export default function StepPredefinedQuestions({ form }: StepPredefinedQuestionsProps) {
+ const { updateStep2Data } = useApplicationStore();
+  const watchedValues = form.watch();
   const startDateValue = form.watch("startDate");
+
+  // Sync with Zustand store
+  useEffect(() => {
+    const { stipendExpectation, startDate, weeklyCommitment, trialAccepted } = watchedValues;
+    updateStep2Data({
+      stipendExpectation: stipendExpectation || "",
+      startDate: startDate || "",
+      weeklyCommitment: weeklyCommitment || "",
+      trialAccepted: trialAccepted || "",
+    });
+  }, [watchedValues.stipendExpectation, watchedValues.startDate, watchedValues.weeklyCommitment, watchedValues.trialAccepted, updateStep2Data]);
 
   return (
     <div className="space-y-8">

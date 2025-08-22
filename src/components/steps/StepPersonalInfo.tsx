@@ -8,17 +8,40 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import type { InsertApplicationForm } from "@/lib/validation";
-
+import { useApplicationStore } from "@/store/useApplicationStore";
+import { useEffect } from "react";
 
 interface StepPersonalInfoProps {
   form: UseFormReturn<InsertApplicationForm>;
 }
 
 export default function StepPersonalInfo({ form }: StepPersonalInfoProps) {
+  const { applicationData, updateStep1Data } = useApplicationStore();
+
+  // Sync form changes with Zustand store
+  const watchedValues = form.watch();
+
+  useEffect(() => {
+    const { fullName, email, phone, linkedin } = watchedValues;
+    updateStep1Data({
+      fullName: fullName || "",
+      email: email || "",
+      phone: phone || "",
+      linkedin: linkedin || "",
+    });
+  }, [
+    watchedValues.fullName,
+    watchedValues.email,
+    watchedValues.phone,
+    watchedValues.linkedin,
+    updateStep1Data,
+  ]);
   return (
     <div className="space-y-6">
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-foreground mb-2">Personal Information</h2>
+        <h2 className="text-2xl font-bold text-foreground mb-2">
+          Personal Information
+        </h2>
         <p className="text-muted-foreground">Tell us about yourself</p>
       </div>
 
@@ -68,11 +91,7 @@ export default function StepPersonalInfo({ form }: StepPersonalInfoProps) {
                 Phone Number *
               </FormLabel>
               <FormControl>
-                <Input
-                  type="tel"
-                  placeholder="+91 98765 43210"
-                  {...field}
-                />
+                <Input type="tel" placeholder="+91 98765 43210" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>

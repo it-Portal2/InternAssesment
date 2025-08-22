@@ -1,8 +1,8 @@
 import type { UseFormReturn } from "react-hook-form";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Send } from "lucide-react";
 import { toast } from "sonner";
-import { collection, addDoc, serverTimestamp} from "firebase/firestore";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 import {
   FormControl,
@@ -22,16 +22,17 @@ interface StepCommentsAndSubmitProps {
   onSubmitSuccess: () => void;
 }
 
-export default function StepCommentsAndSubmit({ 
-  form, 
-  onSubmitSuccess 
+export default function StepCommentsAndSubmit({
+  form,
+  onSubmitSuccess,
 }: StepCommentsAndSubmitProps) {
-  const { aiQuestions, resumeAnalysis } = useApplicationStore();
+  const { aiQuestions, resumeAnalysis, updateStep4Data, reset } =
+    useApplicationStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (data: InsertApplicationForm) => {
     setIsSubmitting(true);
-    
+
     try {
       const aiQuestionsWithAnswers = aiQuestions.map((q) => ({
         id: q.id,
@@ -50,38 +51,43 @@ export default function StepCommentsAndSubmit({
         weeklyCommitment: data.weeklyCommitment || "",
         trialAccepted: data.trialAccepted || false,
         aiQuestions: aiQuestionsWithAnswers,
-        resumeAnalysis: resumeAnalysis ? {
-          skills: resumeAnalysis.skills || [],
-          experience: resumeAnalysis.experience || "Not specified",
-          education: resumeAnalysis.education || "Not specified", 
-          summary: resumeAnalysis.summary || "Not specified"
-        } : {
-          skills: [],
-          experience: "Not specified",
-          education: "Not specified",
-          summary: "No resume analysis available"
-        },
+        resumeAnalysis: resumeAnalysis
+          ? {
+              skills: resumeAnalysis.skills || [],
+              experience: resumeAnalysis.experience || "Not specified",
+              education: resumeAnalysis.education || "Not specified",
+              summary: resumeAnalysis.summary || "Not specified",
+            }
+          : {
+              skills: [],
+              experience: "Not specified",
+              education: "Not specified",
+              summary: "No resume analysis available",
+            },
         applicationStatus: "Pending",
         createdAt: serverTimestamp(),
-
       };
 
-      const docRef = await addDoc(collection(db, "applications"), applicationData);
-      
-      console.log("Application saved with ID:", docRef.id);
-      
+      const docRef = await addDoc(
+        collection(db, "applications"),
+        applicationData
+      );
+
       toast.success("Application submitted successfully!", {
         description: `Application ID: ${docRef.id}. We'll review your application and get back to you soon.`,
-        duration: 6000
+        duration: 6000,
       });
-      
-      onSubmitSuccess();
 
+      reset();
+      form.reset();
+
+      onSubmitSuccess();
     } catch (error) {
       console.error("Error submitting application:", error);
       toast.error("Submission failed", {
-        description: "There was an error submitting your application. Please try again.",
-        duration: 6000
+        description:
+          "There was an error submitting your application. Please try again.",
+        duration: 6000,
       });
     } finally {
       setIsSubmitting(false);
@@ -91,23 +97,34 @@ export default function StepCommentsAndSubmit({
   const isSubmitDisabled = () => {
     // Check if resume is processed
     if (!resumeAnalysis) return true;
-    
+
     // Check if AI questions exist and have answers
     if (aiQuestions.length > 0) {
-      return aiQuestions.some(q => {
+      return aiQuestions.some((q) => {
         const answer = form.getValues(`responses.ai_${q.id}`);
         return !answer || answer.trim() === "";
       });
     }
-    
+
     return false;
   };
+  useEffect(() => {
+    const additionalComments = form.watch("additionalComments");
+    updateStep4Data({
+      additionalComments: additionalComments || "",
+    });
+  }, [form.watch("additionalComments")]);
 
+  
   return (
     <div className="space-y-8">
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-foreground mb-2">Additional Comments & Submit</h2>
-        <p className="text-muted-foreground">Almost done! Any final thoughts?</p>
+        <h2 className="text-2xl font-bold text-foreground mb-2">
+          Additional Comments & Submit
+        </h2>
+        <p className="text-muted-foreground">
+          Almost done! Any final thoughts?
+        </p>
       </div>
 
       <FormField
