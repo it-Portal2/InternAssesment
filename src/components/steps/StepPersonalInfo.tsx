@@ -16,7 +16,7 @@ interface StepPersonalInfoProps {
 }
 
 export default function StepPersonalInfo({ form }: StepPersonalInfoProps) {
-  const { applicationData, updateStep1Data } = useApplicationStore();
+  const { updateStep1Data } = useApplicationStore();
 
   // Sync form changes with Zustand store
   const watchedValues = form.watch();
