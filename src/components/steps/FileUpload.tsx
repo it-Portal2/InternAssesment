@@ -5,7 +5,7 @@ import { Upload, File, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatSize } from "@/utils/formatSize";
-import { toast } from "sonner";
+import { toast } from "sonner"; 
 import type { AnalysisResult } from "@/types/application";
 
 interface FileUploadProps {
@@ -23,7 +23,7 @@ export default function FileUpload({
   isProcessing = false,
   className,
 }: FileUploadProps) {
-  const [processingStep, setProcessingStep] = useState<string>("");
+  const [processingStep, setProcessingStep] = useState<string>('');
 
   // Convert file to base64
   const fileToBase64 = (file: File): Promise<string> => {
@@ -32,66 +32,68 @@ export default function FileUpload({
       reader.readAsDataURL(file);
       reader.onload = () => {
         const result = reader.result as string;
-        const base64 = result.split(",")[1];
+        const base64 = result.split(',')[1];
         resolve(base64);
       };
-      reader.onerror = (error) => reject(error);
+      reader.onerror = error => reject(error);
     });
   };
 
-  // In your FileUpload component - processResume function
+  // Call Vercel API
   const processResume = async (selectedFile: File) => {
     try {
-      setProcessingStep("Converting PDF to base64...");
+   
+      toast.success("File uploaded successfully!", {
+        description: `Processing ${selectedFile.name}...`
+      });
+
+      setProcessingStep('Converting PDF to base64...');
       const base64Data = await fileToBase64(selectedFile);
-
-      setProcessingStep("Analyzing resume with AI...");
-
-      const response = await fetch("https://it-portal-delta.vercel.app/api/public/analyze-resume", {
-        method: "POST",
+      
+      setProcessingStep('Analyzing resume with AI...');
+      
+      const response = await fetch('/api/analyzeResume', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           fileData: base64Data,
           fileName: selectedFile.name,
           fileType: selectedFile.type,
-          fileSize: selectedFile.size,
-        }),
+          fileSize: selectedFile.size
+        })
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(
-          errorData.error || `HTTP error! status: ${response.status}`
-        );
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
 
       const result = await response.json();
-      setProcessingStep("");
-
+      setProcessingStep('');
+      
+    
       toast.success("Resume analysis completed!", {
-        description: `Generated ${
-          result.questions?.length || 0
-        } interview questions based on your experience.`,
-        duration: 5000,
+        description: `Generated ${result.questions?.length || 0} interview questions based on your experience.`,
+        duration: 5000
       });
-
-      onAnalysisComplete(result);
+      
+      onAnalysisComplete(result as AnalysisResult);
+      
     } catch (error) {
-      console.error("Error processing resume:", error);
-      setProcessingStep("");
-
+      console.error('Error processing resume:', error);
+      
+      setProcessingStep('');
+      
+     
       toast.error("Failed to process resume", {
-        description:
-          error instanceof Error
-            ? error.message
-            : "An unexpected error occurred. Please try again.",
+        description: error instanceof Error ? error.message : 'An unexpected error occurred. Please try again.',
         duration: 6000,
         action: {
           label: "Retry",
-          onClick: () => processResume(selectedFile),
-        },
+          onClick: () => processResume(selectedFile)
+        }
       });
     }
   };
@@ -100,30 +102,26 @@ export default function FileUpload({
     async (acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
       if (rejectedFiles.length > 0) {
         const rejection = rejectedFiles[0];
-
+        
         if (rejection.errors.some((e) => e.code === "file-too-large")) {
           toast.error("File too large", {
-            description:
-              "Maximum file size is 5MB. Please choose a smaller file.",
-            duration: 4000,
+            description: 'Maximum file size is 5MB. Please choose a smaller file.',
+            duration: 4000
           });
           return;
         }
-
+        
         if (rejection.errors.some((e) => e.code === "file-invalid-type")) {
           toast.error("Invalid file type", {
-            description:
-              "Only PDF files are supported. Please select a PDF resume.",
-            duration: 4000,
+            description: 'Only PDF files are supported. Please select a PDF resume.',
+            duration: 4000
           });
           return;
         }
-
+        
         toast.error("File upload failed", {
-          description:
-            rejection.errors[0]?.message ||
-            "Please check your file and try again.",
-          duration: 4000,
+          description: rejection.errors[0]?.message || 'Please check your file and try again.',
+          duration: 4000
         });
         return;
       }
@@ -149,11 +147,11 @@ export default function FileUpload({
 
   const removeFile = () => {
     onFileSelect(null);
-    setProcessingStep("");
-
+    setProcessingStep('');
+    
     toast.info("File removed", {
       description: "You can upload a new resume to analyze.",
-      duration: 3000,
+      duration: 3000
     });
   };
 
@@ -161,7 +159,9 @@ export default function FileUpload({
     return (
       <div className="flex flex-col items-center justify-center space-y-4 p-8">
         <img src="/resume-scan.gif" alt="Processing..." className="w-32" />
-        <p className="text-lg font-medium text-blue-600">{processingStep}</p>
+        <p className="text-lg font-medium text-blue-600">
+          {processingStep}
+        </p>
         <div className="text-sm text-gray-500">
           This may take a few moments...
         </div>
