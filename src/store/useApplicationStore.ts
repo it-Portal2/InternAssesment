@@ -189,9 +189,9 @@ export const useApplicationStore = create<ApplicationState>()(
     {
       name: 'application-store',
       // Remove the partialize for now to see if it's causing issues
-      onRehydrateStorage: () => (state) => {
-        console.log('Rehydrated state:', state);
-      },
+      // onRehydrateStorage: () => (state) => {
+      //   console.log('Rehydrated state:', state);
+      // },
     }
   )
 );
