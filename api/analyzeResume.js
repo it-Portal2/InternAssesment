@@ -91,10 +91,17 @@ Be precise and handle missing information gracefully by using appropriate defaul
   }
 }
 
-// Question generation function - OPTIMIZED FOR EXACTLY 10 QUESTIONS
-async function generateInterviewQuestions(resumeData, apiKey) {
+// Question generation function - OPTIMIZED FOR EXACTLY 10 QUESTIONS WITH CUSTOM INSTRUCTIONS
+async function generateInterviewQuestions(resumeData, apiKey, customInstructions = null) {
   try {
     const ai = initializeGemini(apiKey);
+
+    // Build the custom instructions section
+    const customSection = customInstructions && customInstructions.trim() 
+      ? `\nCUSTOM INSTRUCTIONS FOR QUESTION GENERATION:
+${customInstructions}
+Focus on these specific requirements when generating questions. Adapt these instructions while generating the 10-question .\n`
+      : '';
 
     const prompt = `You are a senior HR director at a Fortune 500 company. Based on the candidate's resume analysis, generate EXACTLY 10 interview questions for this candidate.
 
@@ -103,6 +110,8 @@ CANDIDATE ANALYSIS:
 - Experience: ${resumeData.experience}
 - Education: ${resumeData.education}
 - Summary: ${resumeData.summary}
+
+${customSection}
 
 GENERATE EXACTLY 10 QUESTIONS WITH THIS DISTRIBUTION:
 - 4 TECHNICAL QUESTIONS: Core technical knowledge questions based on their specific skills
@@ -215,7 +224,7 @@ export default async function handler(req, res) {
 
     const { fileData, fileName, fileType, fileSize } = req.body;
 
-    console.log('Processing request for file:', fileName);
+    //console.log('Processing request for file:', fileName);
     const startTime = Date.now();
 
     // Input validation
@@ -235,21 +244,29 @@ export default async function handler(req, res) {
     const apiKey1 = process.env.GEMINI_API_KEY_1;
     const apiKey2 = process.env.GEMINI_API_KEY_2;
     
+    // Get custom instructions from environment variable
+    const customInstructions = process.env.INTERVIEW_CUSTOM_INSTRUCTIONS || null;
+    
     if (!apiKey1 || !apiKey2) {
       console.error('GEMINI_API_KEY_1 or GEMINI_API_KEY_2 not found in environment variables');
       return res.status(500).json({ error: 'AI service not configured' });
     }
 
     console.log(`Processing resume: ${fileName} (${Math.round(fileSize / 1024)} KB)`);
+    
+    // Log if custom instructions are being used
+    if (customInstructions) {
+      console.log('Using custom interview instructions from environment');
+    }
 
     // Step 1: Resume analysis (Flash-Lite: ~200-400ms)
     const resumeAnalysis = await analyzeResumeWithAI(fileData, fileType, apiKey1);
     console.log('Resume analysis completed:', resumeAnalysis.skills.length, 'skills found');
     console.log('Analysis time:', Date.now() - startTime, 'ms');
 
-    // Step 2: Question generation (Flash-Lite: ~300-500ms)
+    // Step 2: Question generation with custom instructions (Flash-Lite: ~300-500ms)
     const questionStartTime = Date.now();
-    const questions = await generateInterviewQuestions(resumeAnalysis, apiKey2);
+    const questions = await generateInterviewQuestions(resumeAnalysis, apiKey2, customInstructions);
     console.log('Generated exactly', questions.length, 'questions');
     console.log('Question generation time:', Date.now() - questionStartTime, 'ms');
     
@@ -260,6 +277,7 @@ export default async function handler(req, res) {
       success: true,
       resumeAnalysis,
       questions,
+      customInstructionsUsed: !!customInstructions,
       processingTimeMs: totalProcessingTime,
       model: 'gemini-2.0-flash-lite',
       performance: {
