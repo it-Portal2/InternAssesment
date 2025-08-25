@@ -47,7 +47,7 @@ export default function FileUpload({
 
       setProcessingStep("Analyzing resume with AI...");
 
-      const response = await fetch("https://it-portal-delta.vercel.app/api/analyzeResume", {
+      const response = await fetch("https://it-portal-delta.vercel.app/api/public/analyze-resume", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
