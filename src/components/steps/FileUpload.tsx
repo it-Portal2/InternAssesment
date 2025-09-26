@@ -26,7 +26,7 @@ export default function FileUpload({
   const [processingStep, setProcessingStep] = useState<string>("");
 
   // Error message mapping
-  const getErrorMessage = (errorType: string, originalError: string) => {
+  const getErrorMessage = (errorType: string) => {
     const contactInfo = "careers@cehpoint.co.in or call +91 33690 29331";
 
     switch (errorType) {
@@ -131,7 +131,7 @@ export default function FileUpload({
 
       if (!response.ok || !result.success) {
         const errorType = result.errorType || "general_error";
-        const errorMessage = getErrorMessage(errorType, result.error);
+        const errorMessage = getErrorMessage(errorType);
 
         throw new Error(
           JSON.stringify({
@@ -168,11 +168,9 @@ export default function FileUpload({
         errorInfo = JSON.parse(errorMessage);
       } catch {
         // Handle case where error.message doesn't exist or isn't JSON
-        const fallbackMessage =
-          error instanceof Error ? error.message : "Unknown error occurred";
         errorInfo = {
           type: "general_error",
-          message: getErrorMessage("general_error", fallbackMessage),
+          message: getErrorMessage("general_error"),
         };
       }
 
