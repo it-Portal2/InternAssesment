@@ -7,7 +7,7 @@ import {
   FormItem,
   FormLabel,
 } from "@/components/ui/form";
-import { Alert} from "@/components/ui/alert";
+import { Alert } from "@/components/ui/alert";
 import FileUpload from "./FileUpload";
 import { useApplicationStore } from "@/store/useApplicationStore";
 import type { InsertApplicationForm } from "@/lib/validation";
@@ -23,11 +23,12 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
     uploadedFile,
     aiQuestions,
     isProcessingResume,
+    resumeAnalysis,
     setUploadedFile,
     setResumeAnalysis,
     setAiQuestions,
     setIsProcessingResume,
-    updateStep3Response
+    updateStep3Response,
   } = useApplicationStore();
 
   const handleFileSelect = (file: File | null) => {
@@ -36,16 +37,19 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
       setIsProcessingResume(true);
       // FileUpload component will handle the processing
     } else {
-      setUploadedFile(null);
-      setResumeAnalysis(null);
-      setAiQuestions([]);
-      form.setValue("resumeAnalysis", {
-        skills: [],
-        experience: "",
-        education: "",
-        summary: "",
-      });
-      form.setValue("aiQuestions", []);
+      // Only clear data if no successful analysis exists
+      if (!resumeAnalysis) {
+        setUploadedFile(null);
+        setResumeAnalysis(null);
+        setAiQuestions([]);
+        form.setValue("resumeAnalysis", {
+          skills: [],
+          experience: "",
+          education: "",
+          summary: "",
+        });
+        form.setValue("aiQuestions", []);
+      }
       setIsProcessingResume(false);
     }
   };
@@ -67,11 +71,15 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
         duration: 5000,
       });
     } else {
-      // Handle error case
+      // Handle error case - don't store failed attempts
       setIsProcessingResume(false);
+      setUploadedFile(null); // Allow re-upload on failure
+
+      // Error handling is now done in FileUpload component
+      // This fallback should rarely be reached
       toast.error("Processing failed", {
-        description: "Failed to process your resume. Please try again.",
-        duration: 6000,
+        description: "Please try uploading your resume again.",
+        duration: 4000,
       });
     }
   };

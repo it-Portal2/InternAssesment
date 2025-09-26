@@ -224,20 +224,31 @@ export default async function handler(req, res) {
 
     const { fileData, fileName, fileType, fileSize } = req.body;
 
-    //console.log('Processing request for file:', fileName);
     const startTime = Date.now();
 
     // Input validation
     if (!fileData) {
-      return res.status(400).json({ error: 'No file data provided' });
+      return res.status(400).json({ 
+        success: false,
+        error: 'No file data provided',
+        errorType: 'file_processing_error'
+      });
     }
 
     if (fileType !== 'application/pdf') {
-      return res.status(400).json({ error: 'Only PDF files are supported' });
+      return res.status(400).json({ 
+        success: false,
+        error: 'Only PDF files are supported',
+        errorType: 'file_processing_error'
+      });
     }
 
     if (fileSize > 5 * 1024 * 1024) {
-      return res.status(400).json({ error: 'File too large (max 5MB)' });
+      return res.status(400).json({ 
+        success: false,
+        error: 'File too large (max 5MB)',
+        errorType: 'file_processing_error'
+      });
     }
 
     // Get API keys from environment variables
@@ -249,7 +260,11 @@ export default async function handler(req, res) {
     
     if (!apiKey1 || !apiKey2) {
       console.error('GEMINI_API_KEY_1 or GEMINI_API_KEY_2 not found in environment variables');
-      return res.status(500).json({ error: 'AI service not configured' });
+      return res.status(500).json({ 
+        success: false,
+        error: 'AI service not configured',
+        errorType: 'api_auth_error'
+      });
     }
 
     console.log(`Processing resume: ${fileName} (${Math.round(fileSize / 1024)} KB)`);
@@ -289,8 +304,32 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Resume analysis failed:', error);
-    return res.status(500).json({ 
+    
+    // Categorize errors for user-friendly messages
+    let errorType = 'general_error';
+    let statusCode = 500;
+    
+    if (error.message.includes('quota') || error.message.includes('rate limit') || error.message.includes('429')) {
+      errorType = 'rate_limit_error';
+      statusCode = 429;
+    } else if (error.message.includes('GEMINI_API') || error.message.includes('API key') || error.message.includes('401') || error.message.includes('403')) {
+      errorType = 'api_auth_error';
+      statusCode = 401;
+    } else if (error.message.includes('network') || error.message.includes('timeout') || error.message.includes('ECONNRESET')) {
+      errorType = 'network_error';
+      statusCode = 503;
+    } else if (error.message.includes('PDF') || error.message.includes('file')) {
+      errorType = 'file_processing_error';
+      statusCode = 400;
+    } else if (error.message.includes('Failed to analyze') || error.message.includes('Failed to generate')) {
+      errorType = 'ai_processing_error';
+      statusCode = 502;
+    }
+    
+    return res.status(statusCode).json({ 
+      success: false,
       error: error instanceof Error ? error.message : 'Failed to process resume',
+      errorType: errorType,
       model: 'gemini-2.0-flash-lite'
     });
   }

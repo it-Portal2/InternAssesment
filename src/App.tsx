@@ -13,7 +13,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
-        <Toaster richColors position="top-center"/>
+        <Toaster richColors position="top-center" expand={true}/>
       </BrowserRouter>
     </QueryClientProvider>
   )
