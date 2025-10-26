@@ -107,11 +107,12 @@ export default function FileUpload({
       const base64Data = await fileToBase64(selectedFile);
 
       setProcessingStep("Analyzing resume with AI...");
+    //  console.log("environment", import.meta.env.VITE_ENV);
 
       // Use absolute URL for development, relative for production
       const apiUrl =
-        process.env.NODE_ENV === "development"
-          ? "http://localhost:3001/api/analyzeResume" // Vercel dev server
+        import.meta.env.VITE_ENV === "development"
+          ? "http://localhost:3000/api/analyzeResume" // Vercel dev server
           : "/api/analyzeResume"; // Production relative URL
 
       const response = await fetch(apiUrl, {

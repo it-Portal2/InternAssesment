@@ -1,13 +1,112 @@
 import { GoogleGenAI } from '@google/genai';
 
-// Initialize Gemini AI with specific API key
+// API Key Manager with rotation and fallback
+class APIKeyManager {
+  constructor(apiKeys) {
+    this.apiKeys = apiKeys.filter(key => key && key.trim()); // Remove empty keys
+    this.currentIndex = 0;
+    this.failedKeys = new Set();
+  }
+
+  getCurrentKey() {
+    if (this.failedKeys.size === this.apiKeys.length) {
+      throw new Error('ALL_KEYS_FAILED');
+    }
+    return this.apiKeys[this.currentIndex];
+  }
+
+  markKeyAsFailed(key) {
+    this.failedKeys.add(key);
+    console.log(`API Key ${this.currentIndex + 1} marked as failed`);
+  }
+
+  rotateToNextKey() {
+    const startIndex = this.currentIndex;
+    do {
+      this.currentIndex = (this.currentIndex + 1) % this.apiKeys.length;
+      if (!this.failedKeys.has(this.apiKeys[this.currentIndex])) {
+        console.log(`Rotated to API Key ${this.currentIndex + 1}`);
+        return true;
+      }
+    } while (this.currentIndex !== startIndex);
+    
+    return false; // All keys failed
+  }
+
+  reset() {
+    this.failedKeys.clear();
+    this.currentIndex = 0;
+  }
+}
+
+// Initialize Gemini with retry logic
 const initializeGemini = (apiKey) => {
   return new GoogleGenAI({ apiKey });
 };
 
-// Resume analysis function - EXACT PROMPT UNCHANGED
-async function analyzeResumeWithAI(base64Data, mimeType, apiKey) {
-  try {
+// Determine if error is retryable with another API key
+const isRetryableError = (error) => {
+  const errorMessage = error?.message?.toLowerCase() || '';
+  const retryablePatterns = [
+    'quota', 'rate limit', '429', 'too many requests',
+    'api key', '401', '403', 'unauthorized', 'forbidden',
+    'invalid api key', 'quota exceeded'
+  ];
+  
+  return retryablePatterns.some(pattern => errorMessage.includes(pattern));
+};
+
+// Wrapper function with automatic retry
+async function executeWithRetry(apiKeyManager, operationFn, operationName) {
+  let lastError = null;
+  let attempts = 0;
+  const maxAttempts = apiKeyManager.apiKeys.length;
+
+  while (attempts < maxAttempts) {
+    attempts++;
+    const currentKey = apiKeyManager.getCurrentKey();
+    
+    try {
+      console.log(`Attempt ${attempts}/${maxAttempts} - ${operationName} with API Key ${apiKeyManager.currentIndex + 1}`);
+      const result = await operationFn(currentKey);
+      
+      // Success - reset failed keys for future operations
+      if (attempts > 1) {
+        console.log(`✓ Success after ${attempts} attempts using API Key ${apiKeyManager.currentIndex + 1}`);
+      }
+      
+      return result;
+      
+    } catch (error) {
+      lastError = error;
+      console.error(`✗ ${operationName} failed with API Key ${apiKeyManager.currentIndex + 1}:`, error.message);
+      
+      // Check if error is retryable
+      if (isRetryableError(error)) {
+        apiKeyManager.markKeyAsFailed(currentKey);
+        
+        // Try to rotate to next key
+        if (apiKeyManager.rotateToNextKey()) {
+          console.log(`Retrying ${operationName} with next API key...`);
+          continue; // Retry with next key
+        } else {
+          // All keys exhausted
+          break;
+        }
+      } else {
+        // Non-retryable error (e.g., invalid file, network issue)
+        throw error;
+      }
+    }
+  }
+
+  // All attempts failed
+  throw new Error(`ALL_API_KEYS_FAILED: ${lastError?.message || 'Unknown error'}`);
+}
+
+// Resume analysis with automatic fallback
+async function analyzeResumeWithAI(base64Data, mimeType, apiKeyManager) {
+  const analysisOperation = async (apiKey) => {
     const ai = initializeGemini(apiKey);
     
     const prompt = `You are an expert HR professional and resume analyzer. Analyze this resume document carefully and extract key information.
@@ -44,7 +143,7 @@ Return JSON in this exact format:
 Be precise and handle missing information gracefully by using appropriate defaults.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-lite',  // OPTIMIZED MODEL
+      model: 'gemini-2.0-flash-lite',
       contents: [
         {
           parts: [
@@ -85,22 +184,20 @@ Be precise and handle missing information gracefully by using appropriate defaul
     }
     
     return analysis;
-    
-  } catch (error) {
-    throw new Error(`Failed to analyze resume: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
+  };
+
+  return await executeWithRetry(apiKeyManager, analysisOperation, 'Resume Analysis');
 }
 
-// Question generation function - OPTIMIZED FOR EXACTLY 10 QUESTIONS WITH CUSTOM INSTRUCTIONS
-async function generateInterviewQuestions(resumeData, apiKey, customInstructions = null) {
-  try {
+// Question generation with automatic fallback
+async function generateInterviewQuestions(resumeData, apiKeyManager, customInstructions = null) {
+  const questionOperation = async (apiKey) => {
     const ai = initializeGemini(apiKey);
 
-    // Build the custom instructions section
     const customSection = customInstructions && customInstructions.trim() 
       ? `\nCUSTOM INSTRUCTIONS FOR QUESTION GENERATION:
 ${customInstructions}
-Focus on these specific requirements when generating questions. Adapt these instructions while generating the 10-question .\n`
+Focus on these specific requirements when generating questions. Adapt these instructions while generating the 10-question set.\n`
       : '';
 
     const prompt = `You are a senior HR director at a Fortune 500 company. Based on the candidate's resume analysis, generate EXACTLY 10 interview questions for this candidate.
@@ -173,7 +270,7 @@ Return JSON in this exact format with EXACTLY 10 questions:
 Generate exactly 10 questions following this distribution. Make them specific to their actual resume data.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-lite',  // OPTIMIZED MODEL
+      model: 'gemini-2.0-flash-lite',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -194,15 +291,13 @@ Generate exactly 10 questions following this distribution. Make them specific to
       answer: ""
     }));
     
-    // Ensure exactly 10 questions
     return questions.slice(0, 10);
-    
-  } catch (error) {
-    throw new Error(`Failed to generate questions: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
+  };
+
+  return await executeWithRetry(apiKeyManager, questionOperation, 'Question Generation');
 }
 
-// Main handler function - OPTIMIZED FOR FLASH-LITE SPEED
+// Main handler with comprehensive error handling
 export default async function handler(req, res) {
   try {
     // Enable CORS
@@ -223,7 +318,6 @@ export default async function handler(req, res) {
     }
 
     const { fileData, fileName, fileType, fileSize } = req.body;
-
     const startTime = Date.now();
 
     // Input validation
@@ -251,42 +345,46 @@ export default async function handler(req, res) {
       });
     }
 
-    // Get API keys from environment variables
-    const apiKey1 = process.env.GEMINI_API_KEY_1;
-    const apiKey2 = process.env.GEMINI_API_KEY_2;
-    
-    // Get custom instructions from environment variable
-    const customInstructions = process.env.INTERVIEW_CUSTOM_INSTRUCTIONS || null;
-    
-    if (!apiKey1 || !apiKey2) {
-      console.error('GEMINI_API_KEY_1 or GEMINI_API_KEY_2 not found in environment variables');
+    // Initialize API Key Manager with all available keys
+    const apiKeys = [
+      process.env.GEMINI_API_KEY_1,
+      process.env.GEMINI_API_KEY_2,
+      process.env.GEMINI_API_KEY_3, // Optional: add more keys if available
+    ].filter(Boolean); // Remove undefined/null keys
+
+    if (apiKeys.length === 0) {
+      console.error('No valid GEMINI_API_KEY found in environment variables');
       return res.status(500).json({ 
         success: false,
-        error: 'AI service not configured',
+        error: 'AI service not configured properly',
         errorType: 'api_auth_error'
       });
     }
 
-    console.log(`Processing resume: ${fileName} (${Math.round(fileSize / 1024)} KB)`);
+    const apiKeyManager = new APIKeyManager(apiKeys);
+    console.log(`Initialized with ${apiKeys.length} API key(s)`);
     
-    // Log if custom instructions are being used
+    const customInstructions = process.env.INTERVIEW_CUSTOM_INSTRUCTIONS || null;
+    
     if (customInstructions) {
       console.log('Using custom interview instructions from environment');
     }
 
-    // Step 1: Resume analysis (Flash-Lite: ~200-400ms)
-    const resumeAnalysis = await analyzeResumeWithAI(fileData, fileType, apiKey1);
-    console.log('Resume analysis completed:', resumeAnalysis.skills.length, 'skills found');
-    console.log('Analysis time:', Date.now() - startTime, 'ms');
+    console.log(`Processing resume: ${fileName} (${Math.round(fileSize / 1024)} KB)`);
 
-    // Step 2: Question generation with custom instructions (Flash-Lite: ~300-500ms)
-    const questionStartTime = Date.now();
-    const questions = await generateInterviewQuestions(resumeAnalysis, apiKey2, customInstructions);
-    console.log('Generated exactly', questions.length, 'questions');
-    console.log('Question generation time:', Date.now() - questionStartTime, 'ms');
+    // Step 1: Resume analysis with automatic fallback
+    const resumeAnalysis = await analyzeResumeWithAI(fileData, fileType, apiKeyManager);
+    console.log('✓ Resume analysis completed:', resumeAnalysis.skills.length, 'skills found');
+
+    // Step 2: Question generation with automatic fallback
+    // Reset API key manager for fresh attempt (optional, depends on quota strategy)
+    apiKeyManager.reset();
+    
+    const questions = await generateInterviewQuestions(resumeAnalysis, apiKeyManager, customInstructions);
+    console.log('✓ Generated exactly', questions.length, 'questions');
     
     const totalProcessingTime = Date.now() - startTime;
-    console.log('Total processing time:', totalProcessingTime, 'ms');
+    console.log(`Total processing time: ${totalProcessingTime}ms`);
 
     return res.status(200).json({
       success: true,
@@ -295,9 +393,8 @@ export default async function handler(req, res) {
       customInstructionsUsed: !!customInstructions,
       processingTimeMs: totalProcessingTime,
       model: 'gemini-2.0-flash-lite',
+      apiKeysUsed: apiKeys.length,
       performance: {
-        analysisTimeMs: Date.now() - startTime - (Date.now() - questionStartTime),
-        questionGenTimeMs: Date.now() - questionStartTime,
         totalTimeMs: totalProcessingTime
       }
     });
@@ -308,29 +405,42 @@ export default async function handler(req, res) {
     // Categorize errors for user-friendly messages
     let errorType = 'general_error';
     let statusCode = 500;
+    let userMessage = 'Failed to process resume';
     
-    if (error.message.includes('quota') || error.message.includes('rate limit') || error.message.includes('429')) {
+    const errorMessage = error?.message || '';
+    
+    if (errorMessage.includes('ALL_API_KEYS_FAILED')) {
       errorType = 'rate_limit_error';
       statusCode = 429;
-    } else if (error.message.includes('GEMINI_API') || error.message.includes('API key') || error.message.includes('401') || error.message.includes('403')) {
+      userMessage = 'All AI services are currently busy. Please try again in 10-15 minutes.';
+    } else if (errorMessage.includes('quota') || errorMessage.includes('rate limit') || errorMessage.includes('429')) {
+      errorType = 'rate_limit_error';
+      statusCode = 429;
+      userMessage = 'Service is experiencing high demand. Please try again in a few minutes.';
+    } else if (errorMessage.includes('API key') || errorMessage.includes('401') || errorMessage.includes('403')) {
       errorType = 'api_auth_error';
       statusCode = 401;
-    } else if (error.message.includes('network') || error.message.includes('timeout') || error.message.includes('ECONNRESET')) {
+      userMessage = 'AI service authentication failed. Please contact support.';
+    } else if (errorMessage.includes('network') || errorMessage.includes('timeout') || errorMessage.includes('ECONNRESET')) {
       errorType = 'network_error';
       statusCode = 503;
-    } else if (error.message.includes('PDF') || error.message.includes('file')) {
+      userMessage = 'Network connection issue. Please check your internet and try again.';
+    } else if (errorMessage.includes('PDF') || errorMessage.includes('file') || errorMessage.includes('parse')) {
       errorType = 'file_processing_error';
       statusCode = 400;
-    } else if (error.message.includes('Failed to analyze') || error.message.includes('Failed to generate')) {
+      userMessage = 'Unable to read your resume file. Please ensure it\'s a valid PDF.';
+    } else if (errorMessage.includes('Failed to analyze') || errorMessage.includes('Failed to generate')) {
       errorType = 'ai_processing_error';
       statusCode = 502;
+      userMessage = 'AI processing encountered an issue. Please try again.';
     }
     
     return res.status(statusCode).json({ 
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to process resume',
+      error: userMessage,
       errorType: errorType,
-      model: 'gemini-2.0-flash-lite'
+      model: 'gemini-2.0-flash-lite',
+      technicalDetails: process.env.NODE_ENV === 'development' ? errorMessage : undefined
     });
   }
 }
