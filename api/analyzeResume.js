@@ -1,16 +1,16 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI } from "@google/genai";
 
 // API Key Manager with rotation and fallback
 class APIKeyManager {
   constructor(apiKeys) {
-    this.apiKeys = apiKeys.filter(key => key && key.trim()); // Remove empty keys
+    this.apiKeys = apiKeys.filter((key) => key && key.trim()); // Remove empty keys
     this.currentIndex = 0;
     this.failedKeys = new Set();
   }
 
   getCurrentKey() {
     if (this.failedKeys.size === this.apiKeys.length) {
-      throw new Error('ALL_KEYS_FAILED');
+      throw new Error("ALL_KEYS_FAILED");
     }
     return this.apiKeys[this.currentIndex];
   }
@@ -29,7 +29,7 @@ class APIKeyManager {
         return true;
       }
     } while (this.currentIndex !== startIndex);
-    
+
     return false; // All keys failed
   }
 
@@ -46,14 +46,40 @@ const initializeGemini = (apiKey) => {
 
 // Determine if error is retryable with another API key
 const isRetryableError = (error) => {
-  const errorMessage = error?.message?.toLowerCase() || '';
+  const errorMessage = error?.message?.toLowerCase() || "";
   const retryablePatterns = [
-    'quota', 'rate limit', '429', 'too many requests',
-    'api key', '401', '403', 'unauthorized', 'forbidden',
-    'invalid api key', 'quota exceeded'
+    "quota",
+    "rate limit",
+    "429",
+    "too many requests",
+    "api key",
+    "401",
+    "403",
+    "unauthorized",
+    "forbidden",
+    "invalid api key",
+    "quota exceeded",
   ];
-  
-  return retryablePatterns.some(pattern => errorMessage.includes(pattern));
+
+  return retryablePatterns.some((pattern) => errorMessage.includes(pattern));
+};
+
+// Helper: Clean JSON output from AI (remove markdown code blocks)
+const cleanJsonOutput = (text) => {
+  if (!text) return "{}";
+
+  // Remove markdown code blocks
+  let cleaned = text.replace(/```(?:json)?\n?/g, "").replace(/```/g, "");
+
+  // Find the first '{' and last '}' to extract the JSON object
+  const firstOpen = cleaned.indexOf("{");
+  const lastClose = cleaned.lastIndexOf("}");
+
+  if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
+    cleaned = cleaned.substring(firstOpen, lastClose + 1);
+  }
+
+  return cleaned;
 };
 
 // Wrapper function with automatic retry
@@ -65,26 +91,38 @@ async function executeWithRetry(apiKeyManager, operationFn, operationName) {
   while (attempts < maxAttempts) {
     attempts++;
     const currentKey = apiKeyManager.getCurrentKey();
-    
+
     try {
-      console.log(`Attempt ${attempts}/${maxAttempts} - ${operationName} with API Key ${apiKeyManager.currentIndex + 1}`);
+      console.log(
+        `Attempt ${attempts}/${maxAttempts} - ${operationName} with API Key ${
+          apiKeyManager.currentIndex + 1
+        }`
+      );
       const result = await operationFn(currentKey);
-      
+
       // Success - reset failed keys for future operations
       if (attempts > 1) {
-        console.log(`✓ Success after ${attempts} attempts using API Key ${apiKeyManager.currentIndex + 1}`);
+        console.log(
+          `✓ Success after ${attempts} attempts using API Key ${
+            apiKeyManager.currentIndex + 1
+          }`
+        );
       }
-      
+
       return result;
-      
     } catch (error) {
       lastError = error;
-      console.error(`✗ ${operationName} failed with API Key ${apiKeyManager.currentIndex + 1}:`, error.message);
-      
+      console.error(
+        `✗ ${operationName} failed with API Key ${
+          apiKeyManager.currentIndex + 1
+        }:`,
+        error.message
+      );
+
       // Check if error is retryable
       if (isRetryableError(error)) {
         apiKeyManager.markKeyAsFailed(currentKey);
-        
+
         // Try to rotate to next key
         if (apiKeyManager.rotateToNextKey()) {
           console.log(`Retrying ${operationName} with next API key...`);
@@ -101,14 +139,16 @@ async function executeWithRetry(apiKeyManager, operationFn, operationName) {
   }
 
   // All attempts failed
-  throw new Error(`ALL_API_KEYS_FAILED: ${lastError?.message || 'Unknown error'}`);
+  throw new Error(
+    `ALL_API_KEYS_FAILED: ${lastError?.message || "Unknown error"}`
+  );
 }
 
 // Resume analysis with automatic fallback
 async function analyzeResumeWithAI(base64Data, mimeType, apiKeyManager) {
   const analysisOperation = async (apiKey) => {
     const ai = initializeGemini(apiKey);
-    
+
     const prompt = `You are an expert HR professional and resume analyzer. Analyze this resume document carefully and extract key information.
 
 IMPORTANT: Extract ONLY information that is explicitly present in the resume. Do not infer or assume information.
@@ -140,65 +180,91 @@ Return JSON in this exact format:
   "summary": "Professional summary highlighting key strengths and expertise based on available information"
 }
 
-Be precise and handle missing information gracefully by using appropriate defaults.`;
+  "summary": "Professional summary highlighting key strengths and expertise based on available information"
+}
+
+Be precise and handle missing information gracefully by using appropriate defaults. DO NOT use Markdown formatting (no \`\`\`json blocks). Return ONLY the raw JSON string.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-lite',
+      model: "gemini-2.5-flash",
       contents: [
         {
           parts: [
             {
               inlineData: {
                 data: base64Data,
-                mimeType: mimeType
-              }
+                mimeType: mimeType,
+              },
             },
-            { text: prompt }
-          ]
-        }
+            { text: prompt },
+          ],
+        },
       ],
       config: {
         responseMimeType: "application/json",
         temperature: 0.1,
-        maxOutputTokens: 1000
-      }
+        maxOutputTokens: 8192,
+      },
     });
 
-    const analysis = JSON.parse(response.text || '{}');
-    
+    let analysis;
+    try {
+      analysis = JSON.parse(cleanJsonOutput(response.text));
+    } catch (e) {
+      console.error(
+        "Failed to parse Resume Analysis JSON. Raw text:",
+        response.text
+      );
+      throw e;
+    }
+
     // Validate and set defaults
-    if (!analysis.skills || !Array.isArray(analysis.skills) || analysis.skills.length === 0) {
+    if (
+      !analysis.skills ||
+      !Array.isArray(analysis.skills) ||
+      analysis.skills.length === 0
+    ) {
       analysis.skills = ["General skills"];
     }
-    
+
     if (!analysis.experience) {
       analysis.experience = "0 years, Fresher/Entry level";
     }
-    
+
     if (!analysis.education) {
       analysis.education = "Not specified";
     }
-    
+
     if (!analysis.summary) {
-      analysis.summary = "Candidate with available qualifications seeking opportunities.";
+      analysis.summary =
+        "Candidate with available qualifications seeking opportunities.";
     }
-    
+
     return analysis;
   };
 
-  return await executeWithRetry(apiKeyManager, analysisOperation, 'Resume Analysis');
+  return await executeWithRetry(
+    apiKeyManager,
+    analysisOperation,
+    "Resume Analysis"
+  );
 }
 
 // Question generation with automatic fallback
-async function generateInterviewQuestions(resumeData, apiKeyManager, customInstructions = null) {
+async function generateInterviewQuestions(
+  resumeData,
+  apiKeyManager,
+  customInstructions = null
+) {
   const questionOperation = async (apiKey) => {
     const ai = initializeGemini(apiKey);
 
-    const customSection = customInstructions && customInstructions.trim() 
-      ? `\nCUSTOM INSTRUCTIONS FOR QUESTION GENERATION:
+    const customSection =
+      customInstructions && customInstructions.trim()
+        ? `\nCUSTOM INSTRUCTIONS FOR QUESTION GENERATION:
 ${customInstructions}
 Focus on these specific requirements when generating questions. Adapt these instructions while generating the 10-question set.\n`
-      : '';
+        : "";
 
     const prompt = `You are a senior HR director at a Fortune 500 company. Based on the candidate's resume analysis, generate EXACTLY 10 interview questions for this candidate.
 
@@ -267,54 +333,67 @@ Return JSON in this exact format with EXACTLY 10 questions:
   ]
 }
 
-Generate exactly 10 questions following this distribution. Make them specific to their actual resume data.`;
+Generate exactly 10 questions following this distribution. Make them specific to their actual resume data. DO NOT use Markdown formatting. Return ONLY the raw JSON string.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-lite',
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
         temperature: 0.7,
-        maxOutputTokens: 2000
-      }
+        maxOutputTokens: 8192,
+      },
     });
-    
-    const data = JSON.parse(response.text || '{}');
-    
+
+    let data;
+    try {
+      data = JSON.parse(cleanJsonOutput(response.text));
+    } catch (e) {
+      console.error("Failed to parse Questions JSON. Raw text:", response.text);
+      throw e;
+    }
+
     if (!data.questions || !Array.isArray(data.questions)) {
       throw new Error("Invalid questions format in AI response");
     }
-    
+
     const questions = data.questions.map((q, index) => ({
       id: q.id || `question_${index + 1}_${Date.now()}`,
       question: q.question,
-      answer: ""
+      answer: "",
     }));
-    
+
     return questions.slice(0, 10);
   };
 
-  return await executeWithRetry(apiKeyManager, questionOperation, 'Question Generation');
+  return await executeWithRetry(
+    apiKeyManager,
+    questionOperation,
+    "Question Generation"
+  );
 }
 
 // Main handler with comprehensive error handling
 export default async function handler(req, res) {
   try {
     // Enable CORS
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader(
-      'Access-Control-Allow-Headers',
-      'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+      "Access-Control-Allow-Methods",
+      "GET,OPTIONS,PATCH,DELETE,POST,PUT"
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version"
     );
 
-    if (req.method === 'OPTIONS') {
+    if (req.method === "OPTIONS") {
       return res.status(200).end();
     }
 
-    if (req.method !== 'POST') {
-      return res.status(405).json({ error: 'Method not allowed' });
+    if (req.method !== "POST") {
+      return res.status(405).json({ error: "Method not allowed" });
     }
 
     const { fileData, fileName, fileType, fileSize } = req.body;
@@ -322,26 +401,26 @@ export default async function handler(req, res) {
 
     // Input validation
     if (!fileData) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: 'No file data provided',
-        errorType: 'file_processing_error'
+        error: "No file data provided",
+        errorType: "file_processing_error",
       });
     }
 
-    if (fileType !== 'application/pdf') {
-      return res.status(400).json({ 
+    if (fileType !== "application/pdf") {
+      return res.status(400).json({
         success: false,
-        error: 'Only PDF files are supported',
-        errorType: 'file_processing_error'
+        error: "Only PDF files are supported",
+        errorType: "file_processing_error",
       });
     }
 
     if (fileSize > 5 * 1024 * 1024) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: 'File too large (max 5MB)',
-        errorType: 'file_processing_error'
+        error: "File too large (max 5MB)",
+        errorType: "file_processing_error",
       });
     }
 
@@ -353,36 +432,51 @@ export default async function handler(req, res) {
     ].filter(Boolean); // Remove undefined/null keys
 
     if (apiKeys.length === 0) {
-      console.error('No valid GEMINI_API_KEY found in environment variables');
-      return res.status(500).json({ 
+      console.error("No valid GEMINI_API_KEY found in environment variables");
+      return res.status(500).json({
         success: false,
-        error: 'AI service not configured properly',
-        errorType: 'api_auth_error'
+        error: "AI service not configured properly",
+        errorType: "api_auth_error",
       });
     }
 
     const apiKeyManager = new APIKeyManager(apiKeys);
     console.log(`Initialized with ${apiKeys.length} API key(s)`);
-    
-    const customInstructions = process.env.INTERVIEW_CUSTOM_INSTRUCTIONS || null;
-    
+
+    const customInstructions =
+      process.env.INTERVIEW_CUSTOM_INSTRUCTIONS || null;
+
     if (customInstructions) {
-      console.log('Using custom interview instructions from environment');
+      console.log("Using custom interview instructions from environment");
     }
 
-    console.log(`Processing resume: ${fileName} (${Math.round(fileSize / 1024)} KB)`);
+    console.log(
+      `Processing resume: ${fileName} (${Math.round(fileSize / 1024)} KB)`
+    );
 
     // Step 1: Resume analysis with automatic fallback
-    const resumeAnalysis = await analyzeResumeWithAI(fileData, fileType, apiKeyManager);
-    console.log('✓ Resume analysis completed:', resumeAnalysis.skills.length, 'skills found');
+    const resumeAnalysis = await analyzeResumeWithAI(
+      fileData,
+      fileType,
+      apiKeyManager
+    );
+    console.log(
+      "✓ Resume analysis completed:",
+      resumeAnalysis.skills.length,
+      "skills found"
+    );
 
     // Step 2: Question generation with automatic fallback
     // Reset API key manager for fresh attempt (optional, depends on quota strategy)
     apiKeyManager.reset();
-    
-    const questions = await generateInterviewQuestions(resumeAnalysis, apiKeyManager, customInstructions);
-    console.log('✓ Generated exactly', questions.length, 'questions');
-    
+
+    const questions = await generateInterviewQuestions(
+      resumeAnalysis,
+      apiKeyManager,
+      customInstructions
+    );
+    console.log("✓ Generated exactly", questions.length, "questions");
+
     const totalProcessingTime = Date.now() - startTime;
     console.log(`Total processing time: ${totalProcessingTime}ms`);
 
@@ -392,55 +486,78 @@ export default async function handler(req, res) {
       questions,
       customInstructionsUsed: !!customInstructions,
       processingTimeMs: totalProcessingTime,
-      model: 'gemini-2.0-flash-lite',
+      model: "gemini-2.5-flash",
       apiKeysUsed: apiKeys.length,
       performance: {
-        totalTimeMs: totalProcessingTime
-      }
+        totalTimeMs: totalProcessingTime,
+      },
     });
-
   } catch (error) {
-    console.error('Resume analysis failed:', error);
-    
+    console.error("Resume analysis failed:", error);
+
     // Categorize errors for user-friendly messages
-    let errorType = 'general_error';
+    let errorType = "general_error";
     let statusCode = 500;
-    let userMessage = 'Failed to process resume';
-    
-    const errorMessage = error?.message || '';
-    
-    if (errorMessage.includes('ALL_API_KEYS_FAILED')) {
-      errorType = 'rate_limit_error';
+    let userMessage = "Failed to process resume";
+
+    const errorMessage = error?.message || "";
+
+    if (errorMessage.includes("ALL_API_KEYS_FAILED")) {
+      errorType = "rate_limit_error";
       statusCode = 429;
-      userMessage = 'All AI services are currently busy. Please try again in 10-15 minutes.';
-    } else if (errorMessage.includes('quota') || errorMessage.includes('rate limit') || errorMessage.includes('429')) {
-      errorType = 'rate_limit_error';
+      userMessage =
+        "All AI services are currently busy. Please try again in 10-15 minutes.";
+    } else if (
+      errorMessage.includes("quota") ||
+      errorMessage.includes("rate limit") ||
+      errorMessage.includes("429")
+    ) {
+      errorType = "rate_limit_error";
       statusCode = 429;
-      userMessage = 'Service is experiencing high demand. Please try again in a few minutes.';
-    } else if (errorMessage.includes('API key') || errorMessage.includes('401') || errorMessage.includes('403')) {
-      errorType = 'api_auth_error';
+      userMessage =
+        "Service is experiencing high demand. Please try again in a few minutes.";
+    } else if (
+      errorMessage.includes("API key") ||
+      errorMessage.includes("401") ||
+      errorMessage.includes("403")
+    ) {
+      errorType = "api_auth_error";
       statusCode = 401;
-      userMessage = 'AI service authentication failed. Please contact support.';
-    } else if (errorMessage.includes('network') || errorMessage.includes('timeout') || errorMessage.includes('ECONNRESET')) {
-      errorType = 'network_error';
+      userMessage = "AI service authentication failed. Please contact support.";
+    } else if (
+      errorMessage.includes("network") ||
+      errorMessage.includes("timeout") ||
+      errorMessage.includes("ECONNRESET")
+    ) {
+      errorType = "network_error";
       statusCode = 503;
-      userMessage = 'Network connection issue. Please check your internet and try again.';
-    } else if (errorMessage.includes('PDF') || errorMessage.includes('file') || errorMessage.includes('parse')) {
-      errorType = 'file_processing_error';
+      userMessage =
+        "Network connection issue. Please check your internet and try again.";
+    } else if (
+      errorMessage.includes("PDF") ||
+      errorMessage.includes("file") ||
+      errorMessage.includes("parse")
+    ) {
+      errorType = "file_processing_error";
       statusCode = 400;
-      userMessage = 'Unable to read your resume file. Please ensure it\'s a valid PDF.';
-    } else if (errorMessage.includes('Failed to analyze') || errorMessage.includes('Failed to generate')) {
-      errorType = 'ai_processing_error';
+      userMessage =
+        "Unable to read your resume file. Please ensure it's a valid PDF.";
+    } else if (
+      errorMessage.includes("Failed to analyze") ||
+      errorMessage.includes("Failed to generate")
+    ) {
+      errorType = "ai_processing_error";
       statusCode = 502;
-      userMessage = 'AI processing encountered an issue. Please try again.';
+      userMessage = "AI processing encountered an issue. Please try again.";
     }
-    
-    return res.status(statusCode).json({ 
+
+    return res.status(statusCode).json({
       success: false,
       error: userMessage,
       errorType: errorType,
-      model: 'gemini-2.0-flash-lite',
-      technicalDetails: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      model: "gemini-2.0-flash-lite",
+      technicalDetails:
+        process.env.NODE_ENV === "development" ? errorMessage : undefined,
     });
   }
 }
