@@ -41,7 +41,6 @@ export default function ModalApplicationForm({
     next,
     prev,
     setIsSubmitted,
-    reset,
   } = useApplicationStore();
 
   const [isNextDisabled, setIsNextDisabled] = useState(true);
