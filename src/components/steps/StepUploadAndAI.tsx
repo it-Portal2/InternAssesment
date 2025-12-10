@@ -13,6 +13,11 @@ import { useApplicationStore } from "@/store/useApplicationStore";
 import type { InsertApplicationForm } from "@/lib/validation";
 import { VoiceTextarea } from "@/components/ui/VoiceTextarea";
 import type { AnalysisResult } from "@/types/application";
+import ProctoringMonitor from "../ProctoringMonitor";
+import CameraPermissionCheck from "../CameraPermissionCheck";
+import WarningModal from "../WarningModal";
+import { useProctoring } from "@/hooks/useProctoring";
+import { useCallback, useState } from "react";
 
 interface StepUploadAndAIProps {
   form: UseFormReturn<InsertApplicationForm>;
@@ -29,7 +34,40 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
     setAiQuestions,
     setIsProcessingResume,
     updateStep3Response,
+    reset,
+    isCameraApproved, // NEW: From store
+    setIsCameraApproved, // NEW: From store
   } = useApplicationStore();
+
+  const [warningModalOpen, setWarningModalOpen] = useState(false);
+  const [warningReason, setWarningReason] = useState("");
+  const [isTerminated, setIsTerminated] = useState(false);
+  const [terminationReason, setTerminationReason] = useState("");
+
+  const handleFinalExit = useCallback(() => {
+    // Clear Data
+    reset();
+    form.reset();
+    // Redirect
+    window.location.reload();
+  }, [reset, form]);
+
+  const handleWarning = useCallback((reason: string, _count: number) => {
+    setWarningReason(reason);
+    setWarningModalOpen(true);
+  }, []);
+
+  const handleTerminate = useCallback((reason: string) => {
+    setTerminationReason(reason);
+    setIsTerminated(true);
+  }, []);
+
+  const { violationCount } = useProctoring({
+    isActive: aiQuestions.length > 0, // Only active when questions are present
+    onWarning: handleWarning,
+    onTerminate: handleTerminate,
+    maxViolations: 3,
+  });
 
   const handleFileSelect = (file: File | null) => {
     if (file) {
@@ -86,6 +124,23 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
 
   return (
     <div className="space-y-8">
+      {aiQuestions.length > 0 && (
+        <ProctoringMonitor violationCount={violationCount} maxViolations={3} />
+      )}
+
+      <WarningModal
+        open={warningModalOpen && !isTerminated}
+        onClose={() => setWarningModalOpen(false)}
+        reason={warningReason}
+      />
+
+      <WarningModal
+        open={isTerminated}
+        onClose={handleFinalExit}
+        reason={terminationReason}
+        isTermination={true}
+      />
+
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-foreground mb-2">
           Resume Upload & Answer Questions
@@ -107,12 +162,18 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
         </p>
       </Alert>
 
-      <FileUpload
-        file={uploadedFile}
-        onFileSelect={handleFileSelect}
-        onAnalysisComplete={handleAnalysisComplete}
-        isProcessing={isProcessingResume}
-      />
+      {!isCameraApproved ? (
+        <CameraPermissionCheck
+          onPermissionGranted={() => setIsCameraApproved(true)}
+        />
+      ) : (
+        <FileUpload
+          file={uploadedFile}
+          onFileSelect={handleFileSelect}
+          onAnalysisComplete={handleAnalysisComplete}
+          isProcessing={isProcessingResume}
+        />
+      )}
 
       {aiQuestions.length > 0 && (
         <div className="space-y-6">

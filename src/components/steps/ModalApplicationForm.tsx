@@ -299,11 +299,8 @@ export default function ModalApplicationForm({
   }, [open]);
 
   const handleClose = () => {
+    // Just close the modal - DO NOT reset data so user can resume later
     onOpenChange(false);
-    setTimeout(() => {
-      reset();
-      form.reset();
-    }, 300);
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {

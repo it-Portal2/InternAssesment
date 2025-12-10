@@ -19,6 +19,7 @@ interface ApplicationState {
   aiQuestions: AIQuestion[];
   isProcessingResume: boolean;
   isSubmitted: boolean;
+  isCameraApproved: boolean; // NEW: Persists camera permission state
 
   applicationData: {
     fullName: string;
@@ -50,6 +51,7 @@ interface ApplicationState {
   setAiQuestions: (questions: AIQuestion[]) => void;
   setIsProcessingResume: (processing: boolean) => void;
   setIsSubmitted: (submitted: boolean) => void;
+  setIsCameraApproved: (approved: boolean) => void; // NEW
 
   updateStep1Data: (data: {
     fullName?: string;
@@ -81,6 +83,7 @@ export const useApplicationStore = create<ApplicationState>()(
       aiQuestions: [],
       isProcessingResume: false,
       isSubmitted: false,
+      isCameraApproved: false, // NEW
       applicationData: {
         fullName: "",
         email: "",
@@ -157,6 +160,7 @@ export const useApplicationStore = create<ApplicationState>()(
       setIsProcessingResume: (processing) =>
         set({ isProcessingResume: processing }),
       setIsSubmitted: (submitted) => set({ isSubmitted: submitted }),
+      setIsCameraApproved: (approved) => set({ isCameraApproved: approved }), // NEW
 
       updateStep1Data: (data) =>
         set((state) => ({
@@ -224,6 +228,7 @@ export const useApplicationStore = create<ApplicationState>()(
           aiQuestions: [],
           isProcessingResume: false,
           isSubmitted: false,
+          isCameraApproved: false, // Reset camera approval
           applicationData: {
             fullName: "",
             email: "",
