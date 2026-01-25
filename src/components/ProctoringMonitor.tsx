@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, ShieldAlert, Wifi } from "lucide-react";
-import { cn } from "@/lib/utils"; // Assuming you have this utility, otherwise classnames works
+import { cn } from "@/lib/utils";
 
 interface ProctoringMonitorProps {
   violationCount: number;
@@ -47,8 +47,8 @@ export default function ProctoringMonitor({
       {/* Video Feed Monitor */}
       <div
         className={cn(
-          "relative w-48 h-32 bg-black rounded-lg overflow-hidden border-2 shadow-lg transition-colors duration-300",
-          violationCount > 0 ? "border-red-500" : "border-green-500/50"
+          "relative w-72 h-56 bg-black rounded-lg overflow-hidden border-2 shadow-lg transition-colors duration-300",
+          violationCount > 0 ? "border-red-500" : "border-green-500/50",
         )}
       >
         <video
@@ -56,17 +56,13 @@ export default function ProctoringMonitor({
           autoPlay
           playsInline
           muted
-          className="w-full h-full object-cover transform scale-x-[-1]" // Mirror effect
+          className="w-full h-full object-cover transform scale-x-[-1]"
         />
 
-        {/* Overlays */}
+        {/* REC Indicator Only */}
         <div className="absolute top-2 left-2 flex items-center space-x-1.5 bg-black/60 px-2 py-1 rounded text-xs font-mono text-white">
           <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
           <span>REC</span>
-        </div>
-
-        <div className="absolute bottom-2 right-2 text-[10px] bg-black/60 text-white px-1.5 py-0.5 rounded font-mono">
-          ID: {Math.random().toString(36).substr(2, 9).toUpperCase()}
         </div>
 
         {!streamActive && (
@@ -83,7 +79,7 @@ export default function ProctoringMonitor({
           "flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm backdrop-blur-sm transition-all duration-300",
           violationCount === 0
             ? "bg-green-100/90 text-green-700 border border-green-200"
-            : "bg-red-100/90 text-red-700 border border-red-200 animate-pulse"
+            : "bg-red-100/90 text-red-700 border border-red-200 animate-pulse",
         )}
       >
         {violationCount === 0 ? (

@@ -14,10 +14,10 @@ import type { InsertApplicationForm } from "@/lib/validation";
 import { VoiceTextarea } from "@/components/ui/VoiceTextarea";
 import type { AnalysisResult } from "@/types/application";
 import ProctoringMonitor from "../ProctoringMonitor";
-import CameraPermissionCheck from "../CameraPermissionCheck";
 import WarningModal from "../WarningModal";
 import { useProctoring } from "@/hooks/useProctoring";
-import { useCallback, useState } from "react";
+import { useRecording } from "@/context/RecordingContext";
+import { useCallback, useState, useEffect, useRef } from "react";
 
 interface StepUploadAndAIProps {
   form: UseFormReturn<InsertApplicationForm>;
@@ -35,8 +35,6 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
     setIsProcessingResume,
     updateStep3Response,
     reset,
-    isCameraApproved, // NEW: From store
-    setIsCameraApproved, // NEW: From store
   } = useApplicationStore();
 
   const [warningModalOpen, setWarningModalOpen] = useState(false);
@@ -44,26 +42,68 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
   const [isTerminated, setIsTerminated] = useState(false);
   const [terminationReason, setTerminationReason] = useState("");
 
-  const handleFinalExit = useCallback(() => {
-    // Clear Data
+  const { startRecording, cleanup, isRecording } = useRecording();
+  const hasStartedRecording = useRef(false);
+
+  useEffect(() => {
+    const initRecording = async () => {
+      if (
+        aiQuestions.length > 0 &&
+        !isRecording &&
+        !hasStartedRecording.current
+      ) {
+        hasStartedRecording.current = true;
+        console.log(
+          "[StepUploadAndAI] Questions loaded, starting recording...",
+        );
+
+        const success = await startRecording(() => {
+          toast.error("Screen sharing stopped!", {
+            description:
+              "Stopping screen share is a violation. Your session has been recorded.",
+            duration: 10000,
+          });
+        });
+
+        if (success) {
+          toast.success("Recording started", {
+            description: "Your session is being recorded for proctoring.",
+            duration: 3000,
+          });
+        } else {
+          toast.error("Recording failed to start", {
+            description: "Please ensure screen sharing is allowed and refresh.",
+            duration: 5000,
+          });
+        }
+      }
+    };
+    initRecording();
+  }, [aiQuestions.length, isRecording, startRecording]);
+
+  const handleFinalExit = useCallback(async () => {
+    cleanup();
     reset();
     form.reset();
-    // Redirect
     window.location.reload();
-  }, [reset, form]);
+  }, [reset, form, cleanup]);
 
   const handleWarning = useCallback((reason: string, _count: number) => {
     setWarningReason(reason);
     setWarningModalOpen(true);
   }, []);
 
-  const handleTerminate = useCallback((reason: string) => {
-    setTerminationReason(reason);
-    setIsTerminated(true);
-  }, []);
+  const handleTerminate = useCallback(
+    async (reason: string) => {
+      cleanup();
+      setTerminationReason(reason);
+      setIsTerminated(true);
+    },
+    [cleanup],
+  );
 
   const { violationCount } = useProctoring({
-    isActive: aiQuestions.length > 0, // Only active when questions are present
+    isActive: aiQuestions.length > 0,
     onWarning: handleWarning,
     onTerminate: handleTerminate,
     maxViolations: 3,
@@ -73,9 +113,7 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
     if (file) {
       setUploadedFile(file);
       setIsProcessingResume(true);
-      // FileUpload component will handle the processing
     } else {
-      // Only clear data if no successful analysis exists
       if (!resumeAnalysis) {
         setUploadedFile(null);
         setResumeAnalysis(null);
@@ -94,14 +132,10 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
 
   const handleAnalysisComplete = (result: AnalysisResult) => {
     if (result.success) {
-      // Update store with real API data
       setResumeAnalysis(result.resumeAnalysis);
       setAiQuestions(result.questions);
-
-      // Update form with real API data
       form.setValue("resumeAnalysis", result.resumeAnalysis);
       form.setValue("aiQuestions", result.questions);
-
       setIsProcessingResume(false);
 
       toast.success("Resume processed successfully!", {
@@ -109,12 +143,8 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
         duration: 5000,
       });
     } else {
-      // Handle error case - don't store failed attempts
       setIsProcessingResume(false);
-      setUploadedFile(null); // Allow re-upload on failure
-
-      // Error handling is now done in FileUpload component
-      // This fallback should rarely be reached
+      setUploadedFile(null);
       toast.error("Processing failed", {
         description: "Please try uploading your resume again.",
         duration: 4000,
@@ -142,18 +172,17 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
       />
 
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-foreground mb-2">
+        <h2 className="text-2xl font-bold text-white mb-2">
           Resume Upload & Answer Questions
         </h2>
-        <p className="text-muted-foreground">
+        <p className="text-gray-400">
           Upload your resume to get personalized questions powered by AI
         </p>
       </div>
 
-      {/* Important Notice */}
-      <Alert className="border-amber-200 bg-amber-50">
-        <AlertTriangle className="h-4 w-4 text-amber-600" />
-        <p className="text-amber-800">
+      <Alert className="border-yellow-500/30 bg-yellow-500/10">
+        <AlertTriangle className="h-4 w-4 text-yellow-400" />
+        <p className="text-yellow-200">
           Upload your resume (PDF only, <strong>&lt; 5 MB</strong>). After
           upload, we will analyze your background and generate{" "}
           <strong>personalized interview questions</strong>. Please answer{" "}
@@ -162,43 +191,43 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
         </p>
       </Alert>
 
-      {!isCameraApproved ? (
-        <CameraPermissionCheck
-          onPermissionGranted={() => setIsCameraApproved(true)}
-        />
-      ) : (
-        <FileUpload
-          file={uploadedFile}
-          onFileSelect={handleFileSelect}
-          onAnalysisComplete={handleAnalysisComplete}
-          isProcessing={isProcessingResume}
-        />
-      )}
+      <FileUpload
+        file={uploadedFile}
+        onFileSelect={handleFileSelect}
+        onAnalysisComplete={handleAnalysisComplete}
+        isProcessing={isProcessingResume}
+      />
 
       {aiQuestions.length > 0 && (
         <div className="space-y-6">
           <div className="flex items-center space-x-3">
-            <Bot className="h-5 w-5 text-blue-600" />
-            <h3 className="text-xl font-bold text-foreground">
+            <Bot className="h-5 w-5 text-yellow-400" />
+            <h3 className="text-xl font-bold text-white">
               Personalized Interview Questions
             </h3>
-            <span className="text-sm text-muted-foreground bg-blue-100 px-2 py-1 rounded-full">
+            <span className="text-sm text-yellow-400 bg-yellow-500/20 px-2 py-1 rounded-full">
               {aiQuestions.length} questions
             </span>
+            {isRecording && (
+              <span className="text-xs text-red-400 bg-red-500/20 px-2 py-1 rounded-full flex items-center">
+                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-1" />
+                Recording
+              </span>
+            )}
           </div>
 
           <div className="space-y-6">
             {aiQuestions.map((question) => (
               <div
                 key={question.id}
-                className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm w-full max-w-full"
+                className="border border-gray-700 rounded-xl p-6 bg-gray-900/50 shadow-lg w-full max-w-full"
               >
                 <FormField
                   control={form.control}
                   name={`responses.ai_${question.id}`}
                   render={({ field }) => (
                     <FormItem className="w-full max-w-full">
-                      <FormLabel className="text-base font-semibold text-foreground flex items-start space-x-3 mb-1">
+                      <FormLabel className="text-base font-semibold text-white flex items-start space-x-3 mb-1">
                         <span className="flex-1">{question.question}</span>
                       </FormLabel>
                       <FormControl>
@@ -207,22 +236,21 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
                             value={field.value || ""}
                             onChange={(value) => {
                               field.onChange(value);
-                              // Also update Zustand store
                               updateStep3Response(question.id, value);
                             }}
                             placeholder="Type or speak your answer... Be specific and use examples from your experience."
                             rows={4}
                             language="en-US"
                             silenceTimeout={10000}
-                            className="w-full max-w-full"
+                            className="w-full max-w-full bg-gray-900 border-gray-700 text-white placeholder:text-gray-500 focus:border-yellow-500"
                           />
                         </div>
                       </FormControl>
 
-                      <div className="text-xs text-muted-foreground">
+                      <div className="text-xs text-gray-400">
                         {field.value?.length || 0} characters
                         {(field.value?.length || 0) < 100 && (
-                          <span className="text-amber-600 ml-2">
+                          <span className="text-yellow-400 ml-2">
                             💡 Aim for detailed answers (100+ characters)
                           </span>
                         )}

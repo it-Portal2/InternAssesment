@@ -17,8 +17,6 @@ interface StepPersonalInfoProps {
 
 export default function StepPersonalInfo({ form }: StepPersonalInfoProps) {
   const { updateStep1Data } = useApplicationStore();
-
-  // Sync form changes with Zustand store
   const watchedValues = form.watch();
 
   useEffect(() => {
@@ -36,13 +34,14 @@ export default function StepPersonalInfo({ form }: StepPersonalInfoProps) {
     watchedValues.linkedin,
     updateStep1Data,
   ]);
+
   return (
     <div className="space-y-6">
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-foreground mb-2">
+        <h2 className="text-2xl font-bold text-white mb-2">
           Personal Information
         </h2>
-        <p className="text-muted-foreground">Tell us about yourself</p>
+        <p className="text-gray-400">Tell us about yourself</p>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
@@ -51,11 +50,15 @@ export default function StepPersonalInfo({ form }: StepPersonalInfoProps) {
           name="fullName"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm font-semibold text-foreground">
+              <FormLabel className="text-sm font-semibold text-gray-300">
                 Full Name *
               </FormLabel>
               <FormControl>
-                <Input placeholder="Enter your full name" {...field} />
+                <Input
+                  placeholder="Enter your full name"
+                  {...field}
+                  className="bg-gray-900/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-yellow-500 focus:ring-yellow-500/20"
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -67,7 +70,7 @@ export default function StepPersonalInfo({ form }: StepPersonalInfoProps) {
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm font-semibold text-foreground">
+              <FormLabel className="text-sm font-semibold text-gray-300">
                 Email Address *
               </FormLabel>
               <FormControl>
@@ -75,6 +78,7 @@ export default function StepPersonalInfo({ form }: StepPersonalInfoProps) {
                   type="email"
                   placeholder="your.email@example.com"
                   {...field}
+                  className="bg-gray-900/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-yellow-500 focus:ring-yellow-500/20"
                 />
               </FormControl>
               <FormMessage />
@@ -87,11 +91,16 @@ export default function StepPersonalInfo({ form }: StepPersonalInfoProps) {
           name="phone"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm font-semibold text-foreground">
+              <FormLabel className="text-sm font-semibold text-gray-300">
                 Phone Number *
               </FormLabel>
               <FormControl>
-                <Input type="tel" placeholder="+91 98765 43210" {...field} />
+                <Input
+                  type="tel"
+                  placeholder="+91 98765 43210"
+                  {...field}
+                  className="bg-gray-900/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-yellow-500 focus:ring-yellow-500/20"
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -103,7 +112,7 @@ export default function StepPersonalInfo({ form }: StepPersonalInfoProps) {
           name="linkedin"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm font-semibold text-foreground">
+              <FormLabel className="text-sm font-semibold text-gray-300">
                 LinkedIn Profile
               </FormLabel>
               <FormControl>
@@ -112,6 +121,7 @@ export default function StepPersonalInfo({ form }: StepPersonalInfoProps) {
                   placeholder="https://linkedin.com/in/yourprofile"
                   {...field}
                   value={field.value || ""}
+                  className="bg-gray-900/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-yellow-500 focus:ring-yellow-500/20"
                 />
               </FormControl>
               <FormMessage />

@@ -7,7 +7,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 interface ApplicationState {
-  currentStep: 1 | 2 | 3 | 4;
+  currentStep: 1 | 2 | 3 | 4 | 5;
   uploadedFile: File | null;
   extractedFileData: {
     fileName: string;
@@ -19,7 +19,8 @@ interface ApplicationState {
   aiQuestions: AIQuestion[];
   isProcessingResume: boolean;
   isSubmitted: boolean;
-  isCameraApproved: boolean; // NEW: Persists camera permission state
+  isCameraApproved: boolean; // Persists camera permission state
+  isAllPermissionsApproved: boolean; // All 3 permissions (camera, audio, screen)
 
   applicationData: {
     fullName: string;
@@ -45,13 +46,14 @@ interface ApplicationState {
       fileType: string;
       base64Data: string;
       extractedText: string;
-    } | null
+    } | null,
   ) => void;
   setResumeAnalysis: (analysis: ResumeAnalysis | null) => void;
   setAiQuestions: (questions: AIQuestion[]) => void;
   setIsProcessingResume: (processing: boolean) => void;
   setIsSubmitted: (submitted: boolean) => void;
-  setIsCameraApproved: (approved: boolean) => void; // NEW
+  setIsCameraApproved: (approved: boolean) => void;
+  setIsAllPermissionsApproved: (approved: boolean) => void;
 
   updateStep1Data: (data: {
     fullName?: string;
@@ -83,7 +85,8 @@ export const useApplicationStore = create<ApplicationState>()(
       aiQuestions: [],
       isProcessingResume: false,
       isSubmitted: false,
-      isCameraApproved: false, // NEW
+      isCameraApproved: false,
+      isAllPermissionsApproved: false,
       applicationData: {
         fullName: "",
         email: "",
@@ -101,15 +104,15 @@ export const useApplicationStore = create<ApplicationState>()(
 
       next: () => {
         const currentStep = get().currentStep;
-        if (currentStep < 4) {
-          set({ currentStep: (currentStep + 1) as 1 | 2 | 3 | 4 });
+        if (currentStep < 5) {
+          set({ currentStep: (currentStep + 1) as 1 | 2 | 3 | 4 | 5 });
         }
       },
 
       prev: () => {
         const currentStep = get().currentStep;
         if (currentStep > 1) {
-          set({ currentStep: (currentStep - 1) as 1 | 2 | 3 | 4 });
+          set({ currentStep: (currentStep - 1) as 1 | 2 | 3 | 4 | 5 });
         }
       },
 
@@ -160,7 +163,9 @@ export const useApplicationStore = create<ApplicationState>()(
       setIsProcessingResume: (processing) =>
         set({ isProcessingResume: processing }),
       setIsSubmitted: (submitted) => set({ isSubmitted: submitted }),
-      setIsCameraApproved: (approved) => set({ isCameraApproved: approved }), // NEW
+      setIsCameraApproved: (approved) => set({ isCameraApproved: approved }),
+      setIsAllPermissionsApproved: (approved) =>
+        set({ isAllPermissionsApproved: approved }),
 
       updateStep1Data: (data) =>
         set((state) => ({
@@ -228,7 +233,8 @@ export const useApplicationStore = create<ApplicationState>()(
           aiQuestions: [],
           isProcessingResume: false,
           isSubmitted: false,
-          isCameraApproved: false, // Reset camera approval
+          isCameraApproved: false,
+          isAllPermissionsApproved: false,
           applicationData: {
             fullName: "",
             email: "",
@@ -282,6 +288,6 @@ export const useApplicationStore = create<ApplicationState>()(
           }
         }
       },
-    }
-  )
+    },
+  ),
 );

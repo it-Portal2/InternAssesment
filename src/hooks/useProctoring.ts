@@ -18,7 +18,8 @@ export const useProctoring = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const lastViolationTime = useRef<number>(0);
   const pendingViolation = useRef<string | null>(null);
-  const DEBOUNCE_MS = 1000; // Prevent double-triggers within 1 second
+  const devToolsCheckInterval = useRef<number | null>(null);
+  const DEBOUNCE_MS = 1000;
 
   const processViolation = useCallback(
     (reason: string) => {
@@ -26,17 +27,15 @@ export const useProctoring = ({
         const newCount = prev + 1;
 
         if (newCount >= maxViolations) {
-          // Termination - show final modal
           onTerminate(reason);
         } else {
-          // Warning - show warning modal
           onWarning(reason, newCount);
         }
 
         return newCount;
       });
     },
-    [maxViolations, onWarning, onTerminate]
+    [maxViolations, onWarning, onTerminate],
   );
 
   const incrementViolation = useCallback(
@@ -45,9 +44,7 @@ export const useProctoring = ({
 
       const now = Date.now();
 
-      // If within debounce window, update pending reason but don't trigger yet
       if (now - lastViolationTime.current < DEBOUNCE_MS) {
-        // Update reason to be more comprehensive if multiple events
         if (
           pendingViolation.current &&
           !pendingViolation.current.includes(reason)
@@ -57,66 +54,355 @@ export const useProctoring = ({
         return;
       }
 
-      // Outside debounce window - process immediately
       lastViolationTime.current = now;
       pendingViolation.current = reason;
       processViolation(reason);
     },
-    [isActive, processViolation]
+    [isActive, processViolation],
   );
 
-  // Periodic AI Monitoring Messages (every 2 minutes)
+  // =====================================================
+  // DEVTOOLS DETECTION
+  // =====================================================
+  useEffect(() => {
+    if (!isActive) return;
+
+    // Method 1: Window size mismatch (detects docked DevTools)
+    const checkDevToolsBySize = () => {
+      const widthThreshold = window.outerWidth - window.innerWidth > 160;
+      const heightThreshold = window.outerHeight - window.innerHeight > 160;
+
+      if (widthThreshold || heightThreshold) {
+        incrementViolation("Developer Tools detected - close them immediately");
+      }
+    };
+
+    // Check periodically
+    devToolsCheckInterval.current = window.setInterval(() => {
+      checkDevToolsBySize();
+    }, 1000);
+
+    // Initial check
+    checkDevToolsBySize();
+
+    return () => {
+      if (devToolsCheckInterval.current) {
+        clearInterval(devToolsCheckInterval.current);
+      }
+    };
+  }, [isActive, incrementViolation]);
+
+  // =====================================================
+  // KEYBOARD SHORTCUTS BLOCKING
+  // =====================================================
+  useEffect(() => {
+    if (!isActive) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      const ctrl = e.ctrlKey || e.metaKey;
+      const shift = e.shiftKey;
+      const alt = e.altKey;
+
+      // DevTools shortcuts
+      if (key === "f12") {
+        e.preventDefault();
+        toast.error("Action Blocked", {
+          description: "Developer tools are disabled during assessment.",
+        });
+        incrementViolation("Attempted to open Developer Tools");
+        return;
+      }
+
+      // Ctrl+Shift+I/J/C (DevTools)
+      if (ctrl && shift && ["i", "j", "c"].includes(key)) {
+        e.preventDefault();
+        toast.error("Action Blocked", {
+          description: "Developer tools are disabled during assessment.",
+        });
+        incrementViolation("Attempted to open Developer Tools");
+        return;
+      }
+
+      // Ctrl+U (View Source)
+      if (ctrl && key === "u") {
+        e.preventDefault();
+        toast.error("Action Blocked", {
+          description: "View source is disabled during assessment.",
+        });
+        return;
+      }
+
+      // Ctrl+S (Save)
+      if (ctrl && key === "s") {
+        e.preventDefault();
+        toast.error("Action Blocked", {
+          description: "Saving is disabled during assessment.",
+        });
+        return;
+      }
+
+      // Ctrl+P (Print)
+      if (ctrl && key === "p") {
+        e.preventDefault();
+        toast.error("Action Blocked", {
+          description: "Printing is disabled during assessment.",
+        });
+        return;
+      }
+
+      // PrintScreen (Windows)
+      if (key === "printscreen") {
+        e.preventDefault();
+        toast.error("Action Blocked", {
+          description: "Screenshots are disabled during assessment.",
+        });
+        incrementViolation("Attempted to take screenshot");
+        return;
+      }
+
+      // Alt+Tab (app switching) - inform only, can't fully prevent
+      if (alt && key === "tab") {
+        toast.warning("Warning", {
+          description: "Switching applications may trigger a violation.",
+        });
+        return;
+      }
+
+      // Escape key during fullscreen
+      if (key === "escape") {
+        toast.warning("Stay in Fullscreen", {
+          description: "Exiting fullscreen will be recorded as a violation.",
+        });
+        return;
+      }
+
+      // Ctrl+W/Ctrl+F4 (Close tab)
+      if ((ctrl && key === "w") || (ctrl && key === "f4")) {
+        e.preventDefault();
+        toast.error("Action Blocked", {
+          description: "You cannot close this tab during assessment.",
+        });
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [isActive, incrementViolation]);
+
+  // =====================================================
+  // RIGHT-CLICK PREVENTION
+  // =====================================================
+  useEffect(() => {
+    if (!isActive) return;
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      toast.error("Action Blocked", {
+        description: "Right-click is disabled during assessment.",
+        duration: 2000,
+      });
+    };
+
+    document.addEventListener("contextmenu", handleContextMenu);
+
+    return () => {
+      document.removeEventListener("contextmenu", handleContextMenu);
+    };
+  }, [isActive]);
+
+  // =====================================================
+  // PRINT PREVENTION
+  // =====================================================
+  useEffect(() => {
+    if (!isActive) return;
+
+    const handleBeforePrint = () => {
+      toast.error("Action Blocked", {
+        description: "Printing is disabled during assessment.",
+      });
+      incrementViolation("Attempted to print");
+    };
+
+    const handleAfterPrint = () => {
+      // Log the attempt even if they somehow got past beforeprint
+      console.warn("[Proctoring] Print attempt detected");
+    };
+
+    window.addEventListener("beforeprint", handleBeforePrint);
+    window.addEventListener("afterprint", handleAfterPrint);
+
+    return () => {
+      window.removeEventListener("beforeprint", handleBeforePrint);
+      window.removeEventListener("afterprint", handleAfterPrint);
+    };
+  }, [isActive, incrementViolation]);
+
+  // =====================================================
+  // PAGE CLOSE PREVENTION (beforeunload)
+  // =====================================================
+  useEffect(() => {
+    if (!isActive) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const message =
+        "Your assessment is in progress. Leaving will be recorded as a violation.";
+      e.preventDefault();
+      e.returnValue = message;
+      return message;
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [isActive]);
+
+  // =====================================================
+  // MULTIPLE MONITOR DETECTION
+  // =====================================================
+  useEffect(() => {
+    if (!isActive) return;
+
+    const checkMultipleMonitors = () => {
+      // Method 1: Check screen.isExtended (Chrome 93+)
+      if ("isExtended" in window.screen && (window.screen as any).isExtended) {
+        toast.warning("Multiple Monitors Detected", {
+          description:
+            "Please disconnect external displays for fair assessment.",
+          duration: 10000,
+        });
+      }
+
+      // Method 2: Screen dimensions check
+      const screenWidth = window.screen.width;
+      const availWidth = window.screen.availWidth;
+
+      // If available width is much larger, might indicate extended display
+      if (availWidth > screenWidth * 1.5) {
+        toast.warning("Extended Display Detected", {
+          description: "Please use only your primary monitor.",
+          duration: 10000,
+        });
+      }
+    };
+
+    // Check on start
+    checkMultipleMonitors();
+
+    // Listen for screen changes
+    if ("onchange" in window.screen) {
+      (window.screen as any).onchange = checkMultipleMonitors;
+    }
+  }, [isActive]);
+
+  // =====================================================
+  // VM DETECTION HINTS
+  // =====================================================
+  useEffect(() => {
+    if (!isActive) return;
+
+    const checkVMIndicators = () => {
+      const warnings: string[] = [];
+
+      // Low CPU cores (VMs often have 1-2)
+      if (navigator.hardwareConcurrency && navigator.hardwareConcurrency < 2) {
+        warnings.push("Low CPU cores detected");
+      }
+
+      // Check for common VM user agents
+      const userAgent = navigator.userAgent.toLowerCase();
+      const vmIndicators = ["virtualbox", "vmware", "qemu", "parallels"];
+      if (vmIndicators.some((vm) => userAgent.includes(vm))) {
+        warnings.push("Virtual machine detected");
+      }
+
+      // Check WebGL renderer for VM signatures
+      try {
+        const canvas = document.createElement("canvas");
+        const gl = canvas.getContext("webgl");
+        if (gl) {
+          const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
+          if (debugInfo) {
+            const renderer = gl
+              .getParameter(debugInfo.UNMASKED_RENDERER_WEBGL)
+              .toLowerCase();
+            if (
+              renderer.includes("swiftshader") ||
+              renderer.includes("llvmpipe") ||
+              renderer.includes("virtualbox")
+            ) {
+              warnings.push("VM graphics detected");
+            }
+          }
+        }
+      } catch (e) {
+        // Ignore WebGL detection errors
+      }
+
+      if (warnings.length > 0) {
+        toast.warning("Environment Warning", {
+          description:
+            "Unusual system configuration detected. This session is being monitored.",
+          duration: 15000,
+        });
+        console.warn("[Proctoring] VM indicators:", warnings);
+      }
+    };
+
+    // Check once on activation
+    checkVMIndicators();
+  }, [isActive]);
+
+  // =====================================================
+  // AI MONITORING MESSAGES (Psychological deterrent)
+  // =====================================================
   useEffect(() => {
     if (!isActive) return;
 
     const AI_MONITORING_MESSAGES = [
       {
         title: "Face Check",
-        description: "We are continuously monitoring. Look only at the screen.",
+        description: "Monitoring your face position and expressions.",
       },
       {
         title: "Eye Tracking",
-        description:
-          "We are watching where you look. Keep your eyes on the test.",
+        description: "Analyzing eye movement patterns.",
       },
       {
-        title: "Room Check",
-        description: "We are checking your room for any notes or phones.",
+        title: "Room Scan",
+        description: "Checking for unauthorized materials.",
       },
       {
-        title: "Activity Check",
-        description: "We are watching your activity. Stay focused.",
+        title: "Activity Monitor",
+        description: "Recording all keyboard and mouse activity.",
       },
       {
-        title: "Identity Check",
-        description: "We are verifying it is you. Please stay seated.",
+        title: "Audio Analysis",
+        description: "Listening for voice or unusual sounds.",
       },
       {
-        title: "Movement Check",
-        description: "We noticed you moved. Please sit still.",
+        title: "Screen Analysis",
+        description: "Detecting any overlay applications.",
       },
       {
-        title: "Sound Check",
-        description: "We are listening for any talking or sounds.",
+        title: "Network Check",
+        description: "Monitoring for suspicious connections.",
       },
       {
-        title: "Screen Check",
-        description: "We can see if you try to open other windows.",
-      },
-      {
-        title: "Head Check",
-        description: "We are tracking your head. Please face forward.",
-      },
-      {
-        title: "Focus Check",
-        description: "We are monitoring your attention level.",
+        title: "Browser Check",
+        description: "Scanning for prohibited extensions.",
       },
     ];
 
     let lastMessageIndex = -1;
 
     const showRandomMessage = () => {
-      // Pick a random message different from the last one
       let index;
       do {
         index = Math.floor(Math.random() * AI_MONITORING_MESSAGES.length);
@@ -127,15 +413,12 @@ export const useProctoring = ({
 
       toast.info(msg.title, {
         description: msg.description,
-        duration: 10000,
+        duration: 8000,
       });
     };
 
-    // Show first message after 30 seconds
     const initialTimeout = setTimeout(showRandomMessage, 30000);
-
-    // Then show every 2 minutes
-    const interval = setInterval(showRandomMessage, 120000);
+    const interval = setInterval(showRandomMessage, 90000);
 
     return () => {
       clearTimeout(initialTimeout);
@@ -143,20 +426,22 @@ export const useProctoring = ({
     };
   }, [isActive]);
 
+  // =====================================================
+  // FULLSCREEN ENFORCEMENT
+  // =====================================================
   const enterFullscreen = useCallback(async () => {
     try {
       if (document.documentElement.requestFullscreen) {
         await document.documentElement.requestFullscreen();
       }
     } catch (err) {
-      console.error("Error attempting to enable fullscreen:", err);
+      console.error("Fullscreen error:", err);
     }
   }, []);
 
   useEffect(() => {
     if (!isActive) return;
 
-    // Force fullscreen on activation - with retries
     const attemptFullscreen = async () => {
       try {
         if (!document.fullscreenElement) {
@@ -167,15 +452,12 @@ export const useProctoring = ({
       }
     };
 
-    // Initial attempt with delay
     const timer = setTimeout(attemptFullscreen, 300);
-
-    // Retry every 2 seconds if still not fullscreen
     const interval = setInterval(() => {
       if (!document.fullscreenElement && isActive) {
         attemptFullscreen();
       }
-    }, 2000);
+    }, 3000);
 
     return () => {
       clearTimeout(timer);
@@ -183,56 +465,75 @@ export const useProctoring = ({
     };
   }, [isActive, enterFullscreen]);
 
+  // =====================================================
+  // CORE VIOLATION DETECTION
+  // =====================================================
   useEffect(() => {
     if (!isActive) return;
 
     let hasBeenFullscreen = false;
 
-    // 1. Visibility Change (Tab Switching)
+    // Tab switching
     const handleVisibilityChange = () => {
       if (document.hidden) {
         incrementViolation("You left this tab");
       }
     };
 
-    // 2. Window Blur (Switching to other applications)
+    // Window blur
     const handleWindowBlur = () => {
-      // Only trigger if we've been fullscreen before (assessment started)
       if (hasBeenFullscreen || isFullscreen) {
         incrementViolation("You clicked outside the browser");
       }
     };
 
-    // 3. Fullscreen Change
+    // Fullscreen exit
     const handleFullscreenChange = () => {
       if (document.fullscreenElement) {
         setIsFullscreen(true);
         hasBeenFullscreen = true;
       } else {
         setIsFullscreen(false);
-        // Only count as violation if we were fullscreen before
         if (hasBeenFullscreen) {
           incrementViolation("You exited fullscreen");
         }
       }
     };
 
-    // 4. Prevent Copy/Cut/Paste
+    // Clipboard blocking
     const handleClipboard = (e: ClipboardEvent) => {
       e.preventDefault();
       toast.error("Action Blocked", {
-        description: "Copy/Paste is disabled during the assessment.",
+        description: "Copy/Paste is disabled during assessment.",
         duration: 2000,
       });
     };
 
-    // Attach Listeners
+    // Text selection prevention
+    const handleSelectStart = (e: Event) => {
+      // Allow selection in input/textarea
+      if (
+        (e.target as HTMLElement).tagName === "INPUT" ||
+        (e.target as HTMLElement).tagName === "TEXTAREA"
+      ) {
+        return;
+      }
+      e.preventDefault();
+    };
+
+    // Drag prevention
+    const handleDragStart = (e: DragEvent) => {
+      e.preventDefault();
+    };
+
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("blur", handleWindowBlur);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     document.addEventListener("copy", handleClipboard);
     document.addEventListener("cut", handleClipboard);
     document.addEventListener("paste", handleClipboard);
+    document.addEventListener("selectstart", handleSelectStart);
+    document.addEventListener("dragstart", handleDragStart);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -241,6 +542,8 @@ export const useProctoring = ({
       document.removeEventListener("copy", handleClipboard);
       document.removeEventListener("cut", handleClipboard);
       document.removeEventListener("paste", handleClipboard);
+      document.removeEventListener("selectstart", handleSelectStart);
+      document.removeEventListener("dragstart", handleDragStart);
     };
   }, [isActive, incrementViolation, isFullscreen]);
 

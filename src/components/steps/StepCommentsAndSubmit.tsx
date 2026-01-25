@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import type { InsertApplicationForm } from "@/lib/validation";
 import { useApplicationStore } from "@/store/useApplicationStore";
+import { useRecording } from "@/context/RecordingContext";
 import { db } from "@/Firebase";
 
 interface StepCommentsAndSubmitProps {
@@ -28,12 +29,24 @@ export default function StepCommentsAndSubmit({
 }: StepCommentsAndSubmitProps) {
   const { aiQuestions, resumeAnalysis, updateStep4Data, reset } =
     useApplicationStore();
+  const { stopAndUpload, isRecording, cleanup } = useRecording();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (data: InsertApplicationForm) => {
     setIsSubmitting(true);
+    console.log("[Submit] Starting submission...");
 
     try {
+      let recordingUrl: string | null = null;
+      if (isRecording) {
+        console.log("[Submit] Stopping and uploading recording...");
+        toast.info("Uploading recording...", { duration: 3000 });
+        recordingUrl = await stopAndUpload();
+        console.log("[Submit] Recording URL:", recordingUrl);
+      } else {
+        cleanup();
+      }
+
       const aiQuestionsWithAnswers = aiQuestions.map((q) => ({
         id: q.id,
         question: q.question,
@@ -64,26 +77,36 @@ export default function StepCommentsAndSubmit({
               education: "Not specified",
               summary: "No resume analysis available",
             },
+        recordingUrl: recordingUrl || null,
         applicationStatus: "Pending",
         createdAt: serverTimestamp(),
       };
 
+      console.log("[Submit] Saving to Firestore...");
       const docRef = await addDoc(
         collection(db, "applications"),
-        applicationData
+        applicationData,
       );
 
+      console.log("[Submit] Success! Doc ID:", docRef.id);
       toast.success("Application submitted successfully!", {
         description: `Application ID: ${docRef.id}. We'll review your application and get back to you soon.`,
         duration: 6000,
       });
 
+      if (recordingUrl) {
+        toast.success("Recording saved!", {
+          description: "Your proctoring video has been uploaded.",
+          duration: 3000,
+        });
+      }
+
       reset();
       form.reset();
-
       onSubmitSuccess();
     } catch (error) {
-      console.error("Error submitting application:", error);
+      console.error("[Submit] Error:", error);
+      cleanup();
       toast.error("Submission failed", {
         description:
           "There was an error submitting your application. Please try again.",
@@ -95,36 +118,34 @@ export default function StepCommentsAndSubmit({
   };
 
   const isSubmitDisabled = () => {
-    // Check if resume is processed
     if (!resumeAnalysis) return true;
-
-    // Check if AI questions exist and have answers
     if (aiQuestions.length > 0) {
       return aiQuestions.some((q) => {
         const answer = form.getValues(`responses.ai_${q.id}`);
         return !answer || answer.trim() === "";
       });
     }
-
     return false;
   };
+
   useEffect(() => {
     const additionalComments = form.watch("additionalComments");
-    updateStep4Data({
-      additionalComments: additionalComments || "",
-    });
+    updateStep4Data({ additionalComments: additionalComments || "" });
   }, [form.watch("additionalComments")]);
 
-  
   return (
     <div className="space-y-8">
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-foreground mb-2">
+        <h2 className="text-2xl font-bold text-white mb-2">
           Additional Comments & Submit
         </h2>
-        <p className="text-muted-foreground">
-          Almost done! Any final thoughts?
-        </p>
+        <p className="text-gray-400">Almost done! Any final thoughts?</p>
+        {isRecording && (
+          <p className="text-xs text-red-400 mt-2 flex items-center">
+            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-1" />
+            Recording active - will stop and save on submit
+          </p>
+        )}
       </div>
 
       <FormField
@@ -132,7 +153,7 @@ export default function StepCommentsAndSubmit({
         name="additionalComments"
         render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-sm font-semibold text-foreground">
+            <FormLabel className="text-sm font-semibold text-gray-300">
               Additional Comments or Questions
             </FormLabel>
             <FormControl>
@@ -141,6 +162,7 @@ export default function StepCommentsAndSubmit({
                 placeholder="Anything else you'd like us to know..."
                 {...field}
                 value={field.value || ""}
+                className="bg-gray-900/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-yellow-500 focus:ring-yellow-500/20"
               />
             </FormControl>
             <FormMessage />
@@ -148,18 +170,18 @@ export default function StepCommentsAndSubmit({
         )}
       />
 
-      <div className="pt-6 border-t border-border">
+      <div className="pt-6 border-t border-white/10">
         <Button
           type="button"
           onClick={form.handleSubmit(handleSubmit)}
           disabled={isSubmitting || isSubmitDisabled()}
-          className="w-full h-12 text-lg font-semibold"
+          className="w-full h-12 text-lg font-semibold bg-yellow-500 hover:bg-yellow-600 text-black disabled:bg-gray-700 disabled:text-gray-500 shadow-lg shadow-yellow-500/20"
           size="lg"
         >
           {isSubmitting ? (
             <div className="flex items-center space-x-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-2 border-background border-t-transparent" />
-              <span>Submitting...</span>
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-black border-t-transparent" />
+              <span>Submitting & Uploading Recording...</span>
             </div>
           ) : (
             <div className="flex items-center space-x-2">
