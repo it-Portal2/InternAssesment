@@ -244,10 +244,10 @@ export default function FileUpload({
 
   if (isProcessing && processingStep) {
     return (
-      <div className="flex flex-col items-center justify-center space-y-4 p-8 bg-gray-900/50 rounded-2xl border border-yellow-500/20">
+      <div className="flex flex-col items-center justify-center space-y-4 p-8 bg-white/5 rounded-2xl border border-yellow-500/20">
         <img src="/resume-scan.gif" alt="Processing..." className="w-32" />
         <p className="text-lg font-medium text-yellow-400">{processingStep}</p>
-        <div className="text-sm text-gray-400">
+        <div className="text-white/50 text-sm">
           This may take a few moments...
         </div>
       </div>
@@ -257,7 +257,7 @@ export default function FileUpload({
   if (file && !processingStep && !isProcessing) {
     return (
       <div className={cn("space-y-4", className)}>
-        <div className="p-4 border border-yellow-500/30 bg-yellow-500/10 rounded-xl">
+        <div className="p-4 border border-yellow-500/30 bg-white/5 rounded-xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <File className="h-8 w-8 text-yellow-400" />
@@ -290,11 +290,11 @@ export default function FileUpload({
       <div
         {...getRootProps()}
         className={cn(
-          "relative border-2 border-dashed rounded-2xl p-10 text-center transition-all duration-300 cursor-pointer bg-gray-900/50",
+          "relative border-2 border-dashed border-white/20 rounded-2xl p-10 text-center transition-all duration-300 cursor-pointer bg-white/5",
           {
-            "border-yellow-400 bg-yellow-500/10 shadow-xl shadow-yellow-500/10 scale-[1.01]":
+            "border-yellow-400 bg-white/5 shadow-xl shadow-yellow-500/10 scale-[1.01]":
               isDragActive,
-            "border-gray-700 hover:border-yellow-500/50 hover:bg-gray-900":
+            "border-white/20 hover:border-yellow-500/50 hover:bg-yellow-200/10":
               !isDragActive,
           },
         )}
@@ -318,7 +318,7 @@ export default function FileUpload({
               </h3>
               <p className="text-gray-400 text-lg">
                 {isDragActive
-                  ? "Perfect! Drop it right here 🎯"
+                  ? "Perfect! Drop it right here "
                   : "Ready to get started? Upload or Drag your resume below"}
               </p>
             </div>
@@ -359,7 +359,7 @@ export default function FileUpload({
 
             <Button
               type="button"
-              className="bg-yellow-500 hover:bg-yellow-600 text-black px-10 py-4 rounded-xl font-bold text-lg shadow-xl shadow-yellow-500/30 hover:shadow-2xl transform hover:scale-105 transition-all duration-300"
+              className="bg-yellow-500 hover:bg-yellow-600 text-black px-10 py-4 rounded-md font-bold text-lg shadow-xl shadow-yellow-500/30 hover:shadow-2xl transform hover:scale-105 transition-all duration-300"
             >
               <Upload className="h-5 w-5 mr-3" />
               Browse Files

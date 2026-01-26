@@ -14,6 +14,7 @@ import type { InsertApplicationForm } from "@/lib/validation";
 import { VoiceTextarea } from "@/components/ui/VoiceTextarea";
 import type { AnalysisResult } from "@/types/application";
 import ProctoringMonitor from "../ProctoringMonitor";
+import { ScreenCheckModal } from "@/components/ScreenCheckModal";
 import WarningModal from "../WarningModal";
 import { useProctoring } from "@/hooks/useProctoring";
 import { useRecording } from "@/context/RecordingContext";
@@ -102,12 +103,13 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
     [cleanup],
   );
 
-  const { violationCount } = useProctoring({
-    isActive: aiQuestions.length > 0,
-    onWarning: handleWarning,
-    onTerminate: handleTerminate,
-    maxViolations: 3,
-  });
+  const { violationCount, hasMultipleScreens, checkScreenCount } =
+    useProctoring({
+      isActive: aiQuestions.length > 0,
+      onWarning: handleWarning,
+      onTerminate: handleTerminate,
+      maxViolations: 3,
+    });
 
   const handleFileSelect = (file: File | null) => {
     if (file) {
@@ -158,6 +160,11 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
         <ProctoringMonitor violationCount={violationCount} maxViolations={3} />
       )}
 
+      <ScreenCheckModal
+        isOpen={hasMultipleScreens}
+        onCheckAgain={checkScreenCount}
+      />
+
       <WarningModal
         open={warningModalOpen && !isTerminated}
         onClose={() => setWarningModalOpen(false)}
@@ -172,24 +179,27 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
       />
 
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-white mb-2">
+        <h2 className="text-2xl font-bold text-yellow-400">
           Resume Upload & Answer Questions
         </h2>
-        <p className="text-gray-400">
+        <p className="text-white/50 text-sm">
           Upload your resume to get personalized questions powered by AI
         </p>
       </div>
 
-      <Alert className="border-yellow-500/30 bg-yellow-500/10">
-        <AlertTriangle className="h-4 w-4 text-yellow-400" />
-        <p className="text-yellow-200">
-          Upload your resume (PDF only, <strong>&lt; 5 MB</strong>). After
-          upload, we will analyze your background and generate{" "}
-          <strong>personalized interview questions</strong>. Please answer{" "}
-          <strong>by yourself</strong>— <strong>no AI or external help</strong>.{" "}
-          <strong>Malpractice leads to rejection.</strong>
-        </p>
-      </Alert>
+      {aiQuestions.length === 0 && (
+        <Alert className="border-yellow-500/30 bg-yellow-500/10">
+          <AlertTriangle className="h-4 w-4 !text-yellow-500" />
+          <p className="text-white">
+            Upload your resume (PDF only, <strong>&lt; 5 MB</strong>). After
+            upload, we will analyze your background and generate{" "}
+            <strong>personalized interview questions</strong>. Please answer{" "}
+            <strong>by yourself</strong>—{" "}
+            <strong>no AI or external help</strong>.{" "}
+            <strong>Malpractice leads to rejection.</strong>
+          </p>
+        </Alert>
+      )}
 
       <FileUpload
         file={uploadedFile}
@@ -220,7 +230,11 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
             {aiQuestions.map((question) => (
               <div
                 key={question.id}
-                className="border border-gray-700 rounded-xl p-6 bg-gray-900/50 shadow-lg w-full max-w-full"
+                className="border rounded-xl p-6 backdrop-blur-sm shadow-lg w-full max-w-full"
+                style={{
+                  backgroundColor: "rgba(255, 255, 255, 0.05)",
+                  borderColor: "rgba(75, 75, 75, 0.8)",
+                }}
               >
                 <FormField
                   control={form.control}

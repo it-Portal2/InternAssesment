@@ -56,7 +56,7 @@ export default function Header({ onStartApplication }: HeaderProps) {
               <h2 className="text-sm sm:text-xl font-semibold text-white tracking-tight">
                 InternAssessment
               </h2>
-              <p className="text-[9px] sm:text-[12px] text-gray-400 -mt-0.5">
+              <p className="text-[9px] sm:text-[12px] text-white/50 -mt-0.5">
                 By <span className="text-yellow-400">Cehpoint</span>
               </p>
             </div>

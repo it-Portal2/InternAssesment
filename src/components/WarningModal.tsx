@@ -18,9 +18,15 @@ export default function WarningModal({
 
   if (isTermination) {
     return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200">
-        <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-          <div className="bg-gray-900 p-6 flex flex-col items-center justify-center space-y-2">
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+        <div
+          className="backdrop-blur-xl border border-red-500/30 rounded-2xl shadow-2xl shadow-red-500/20 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200"
+          style={{ backgroundColor: "rgba(255, 255, 255, 0.05)" }}
+        >
+          <div
+            className="border-b border-red-500/30 p-6 flex flex-col items-center justify-center space-y-2"
+            style={{ backgroundColor: "rgba(239, 68, 68, 0.15)" }}
+          >
             <Skull className="h-12 w-12 text-red-500" />
             <h2 className="text-2xl font-black text-white uppercase tracking-wider">
               Assessment Terminated
@@ -28,22 +34,25 @@ export default function WarningModal({
           </div>
 
           <div className="p-6 text-center space-y-4">
-            <div className="bg-red-100 border border-red-300 rounded-md p-3 text-red-900 font-semibold text-sm">
+            <div
+              className="border border-red-500/30 rounded-lg p-3 text-red-400 font-semibold text-sm"
+              style={{ backgroundColor: "rgba(239, 68, 68, 0.1)" }}
+            >
               REASON: {reason}
             </div>
 
-            <p className="text-gray-700 text-sm">
+            <p className="text-white/70 text-sm">
               Your session has been terminated due to multiple violations of our
               assessment integrity policies. This action is final.
             </p>
 
-            <p className="text-gray-500 text-xs">
+            <p className="text-white/50 text-xs">
               All progress has been revoked. This incident has been logged.
             </p>
 
             <Button
               onClick={onClose}
-              className="w-full bg-gray-900 hover:bg-gray-800 text-white font-bold"
+              className="w-full bg-red-500 hover:bg-red-600 text-white font-bold"
             >
               Exit Assessment
             </Button>
@@ -55,32 +64,40 @@ export default function WarningModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-        <div className="bg-red-600 p-4 flex items-center justify-center">
-          <AlertTriangle className="h-10 w-10 text-white" />
+      <div
+        className="backdrop-blur-xl border border-yellow-500/30 rounded-2xl shadow-2xl shadow-yellow-500/20 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200"
+        style={{ backgroundColor: "rgba(255, 255, 255, 0.05)" }}
+      >
+        <div
+          className="border-b border-yellow-500/30 p-6 flex flex-col items-center justify-center space-y-2"
+          style={{ backgroundColor: "rgba(234, 179, 8, 0.15)" }}
+        >
+          <AlertTriangle className="h-12 w-12 text-yellow-500" />
+          <h2 className="text-2xl font-bold text-white">Proctoring Alert</h2>
         </div>
 
         <div className="p-6 text-center space-y-4">
-          <h2 className="text-2xl font-bold text-gray-900">Proctoring Alert</h2>
-
-          <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-800 font-medium text-sm">
+          <div
+            className="border border-yellow-500/30 rounded-lg p-3 text-yellow-400 font-medium text-sm"
+            style={{ backgroundColor: "rgba(234, 179, 8, 0.1)" }}
+          >
             Detected Activity: {reason}
           </div>
 
-          <p className="text-gray-600 text-sm">
+          <p className="text-white/70 text-sm">
             Our AI-powered proctoring system has detected suspicious activity.
             You are required to remain focused on this assessment window at all
             times.
           </p>
 
-          <p className="text-red-700 text-sm font-semibold">
+          <p className="text-red-400 text-sm font-semibold">
             Further violations may result in immediate termination of your
             assessment.
           </p>
 
           <Button
             onClick={onClose}
-            className="w-full bg-red-600 hover:bg-red-700 text-white"
+            className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold"
           >
             I Understand, Resume Assessment
           </Button>

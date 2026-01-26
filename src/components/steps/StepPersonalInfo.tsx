@@ -38,10 +38,10 @@ export default function StepPersonalInfo({ form }: StepPersonalInfoProps) {
   return (
     <div className="space-y-6">
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-white mb-2">
+        <h2 className="text-2xl font-bold text-yellow-400">
           Personal Information
         </h2>
-        <p className="text-gray-400">Tell us about yourself</p>
+        <p className="text-white/50 text-sm">Tell us about yourself</p>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
@@ -50,7 +50,7 @@ export default function StepPersonalInfo({ form }: StepPersonalInfoProps) {
           name="fullName"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm font-semibold text-gray-300">
+              <FormLabel className="text-sm font-semibold text-yellow-400/90">
                 Full Name *
               </FormLabel>
               <FormControl>
@@ -70,7 +70,7 @@ export default function StepPersonalInfo({ form }: StepPersonalInfoProps) {
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm font-semibold text-gray-300">
+              <FormLabel className="text-sm font-semibold text-yellow-400/90">
                 Email Address *
               </FormLabel>
               <FormControl>
@@ -91,7 +91,7 @@ export default function StepPersonalInfo({ form }: StepPersonalInfoProps) {
           name="phone"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm font-semibold text-gray-300">
+              <FormLabel className="text-sm font-semibold text-yellow-400/90">
                 Phone Number *
               </FormLabel>
               <FormControl>
@@ -112,7 +112,7 @@ export default function StepPersonalInfo({ form }: StepPersonalInfoProps) {
           name="linkedin"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm font-semibold text-gray-300">
+              <FormLabel className="text-sm font-semibold text-yellow-400/90">
                 LinkedIn Profile
               </FormLabel>
               <FormControl>

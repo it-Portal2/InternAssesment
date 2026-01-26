@@ -136,10 +136,12 @@ export default function StepCommentsAndSubmit({
   return (
     <div className="space-y-8">
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-white mb-2">
-          Additional Comments & Submit
+        <h2 className="text-2xl font-bold text-yellow-400">
+          Your Feedback & Submit
         </h2>
-        <p className="text-gray-400">Almost done! Any final thoughts?</p>
+        <p className="text-white/50 text-sm">
+          Almost done! Share your experience with this assessment.
+        </p>
         {isRecording && (
           <p className="text-xs text-red-400 mt-2 flex items-center">
             <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-1" />
@@ -153,16 +155,20 @@ export default function StepCommentsAndSubmit({
         name="additionalComments"
         render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-sm font-semibold text-gray-300">
-              Additional Comments or Questions
+            <FormLabel className="text-sm font-semibold text-yellow-400/90">
+              Assessment Feedback (Optional)
             </FormLabel>
             <FormControl>
               <Textarea
                 rows={4}
-                placeholder="Anything else you'd like us to know..."
+                placeholder="How was your experience with this assessment? Any suggestions for improvement? Your feedback helps us enhance the process..."
                 {...field}
                 value={field.value || ""}
-                className="bg-gray-900/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-yellow-500 focus:ring-yellow-500/20"
+                style={{
+                  backgroundColor: "rgba(255, 255, 255, 0.05)",
+                  borderColor: "rgba(75, 75, 75, 0.8)",
+                }}
+                className="text-white placeholder:text-gray-500 focus:border-yellow-500 focus:ring-yellow-500/20"
               />
             </FormControl>
             <FormMessage />

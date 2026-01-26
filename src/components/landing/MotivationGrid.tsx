@@ -137,7 +137,7 @@ function FeatureCard({
       <h3 className="text-base md:text-lg font-medium text-white">
         {feature.title}
       </h3>
-      <p className="mt-2 text-xs md:text-sm text-gray-400 font-light leading-relaxed">
+      <p className="mt-2 text-xs md:text-sm text-white/50 font-light leading-relaxed">
         {feature.description}
       </p>
     </motion.div>
@@ -174,7 +174,7 @@ export default function MotivationGrid() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-gray-400 text-sm md:text-base max-w-2xl mx-auto px-4"
+            className="text-white/50 text-sm md:text-base max-w-2xl mx-auto px-4"
           >
             Everything you need to build a fast, secure, and scalable career
             trajectory.

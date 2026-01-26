@@ -1,23 +1,25 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
-  ShieldCheck,
   Camera,
   Mic,
   AlertCircle,
   Loader2,
   CheckCircle,
+  Monitor,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useApplicationStore } from "@/store/useApplicationStore";
+import { checkMultipleScreens } from "@/utils/screenDetection";
 
 interface StepPermissionsProps {
   onAllPermissionsGranted: () => void;
 }
 
-type PermissionStep = "camera" | "audio";
+type PermissionStep = "screen" | "camera" | "audio";
 type StepStatus = "pending" | "requesting" | "granted" | "denied";
 
 interface StepState {
+  screen: StepStatus;
   camera: StepStatus;
   audio: StepStatus;
 }
@@ -29,19 +31,54 @@ export default function StepPermissions({
     useApplicationStore();
 
   const [stepState, setStepState] = useState<StepState>({
+    screen: isAllPermissionsApproved ? "granted" : "pending",
     camera: isAllPermissionsApproved ? "granted" : "pending",
     audio: isAllPermissionsApproved ? "granted" : "pending",
   });
+
   const [currentStep, setCurrentStep] = useState<PermissionStep>(
-    isAllPermissionsApproved ? "audio" : "camera",
+    isAllPermissionsApproved ? "audio" : "screen",
   );
+
   const [error, setError] = useState<string | null>(null);
 
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
 
+  // If we are mounting and permissions aren't approved, calculate the correct starting step
+  useEffect(() => {
+    if (!isAllPermissionsApproved) {
+      if (stepState.screen !== "granted") setCurrentStep("screen");
+      else if (stepState.camera !== "granted") setCurrentStep("camera");
+      else if (stepState.audio !== "granted") setCurrentStep("audio");
+    }
+  }, []);
+
   const updateStepStatus = (step: PermissionStep, status: StepStatus) => {
     setStepState((prev) => ({ ...prev, [step]: status }));
+  };
+
+  const requestScreenCheck = async () => {
+    setError(null);
+    updateStepStatus("screen", "requesting");
+
+    try {
+      const hasMultiple = await checkMultipleScreens();
+      if (hasMultiple) {
+        updateStepStatus("screen", "denied");
+        setError(
+          "Multiple screens detected. Please disconnect external monitors to proceed.",
+        );
+      } else {
+        updateStepStatus("screen", "granted");
+        setCurrentStep("camera");
+      }
+    } catch (e) {
+      console.error(e);
+      // If check fails, we might warn or block. Let's assume block for safety.
+      updateStepStatus("screen", "denied");
+      setError("Unable to verify screen configuration. Please try again.");
+    }
   };
 
   const requestCamera = async () => {
@@ -81,6 +118,8 @@ export default function StepPermissions({
 
   const getStepIcon = (step: PermissionStep) => {
     switch (step) {
+      case "screen":
+        return Monitor;
       case "camera":
         return Camera;
       case "audio":
@@ -90,6 +129,8 @@ export default function StepPermissions({
 
   const getStepLabel = (step: PermissionStep) => {
     switch (step) {
+      case "screen":
+        return "Screen Check";
       case "camera":
         return "Camera";
       case "audio":
@@ -99,6 +140,8 @@ export default function StepPermissions({
 
   const getStepDescription = (step: PermissionStep) => {
     switch (step) {
+      case "screen":
+        return "We need to ensure you are using a single monitor for a fair assessment.";
       case "camera":
         return "We need to verify your identity and monitor your activity during the assessment.";
       case "audio":
@@ -108,6 +151,8 @@ export default function StepPermissions({
 
   const getButtonAction = () => {
     switch (currentStep) {
+      case "screen":
+        return requestScreenCheck;
       case "camera":
         return requestCamera;
       case "audio":
@@ -117,70 +162,60 @@ export default function StepPermissions({
 
   const isRequesting = stepState[currentStep] === "requesting";
   const allGranted =
-    stepState.camera === "granted" && stepState.audio === "granted";
+    stepState.screen === "granted" &&
+    stepState.camera === "granted" &&
+    stepState.audio === "granted";
   const StepIcon = getStepIcon(currentStep);
 
   return (
     <div className="space-y-8">
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-white mb-2">
+        <h2 className="text-2xl font-bold text-yellow-400">
           Security Permissions
         </h2>
-        <p className="text-gray-400">
+        <p className="text-white/50 text-sm">
           Grant required permissions before proceeding to the assessment
         </p>
       </div>
 
-      <div className="bg-gradient-to-br from-gray-900 to-black rounded-xl p-8 border border-white/10 shadow-xl shadow-yellow-500/5">
-        <div className="flex items-center space-x-3 mb-6">
-          <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
-            <ShieldCheck className="w-5 h-5 text-yellow-400" />
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-white">
-              Security Verification Required
-            </h3>
-            <p className="text-gray-400 text-sm">
-              Camera and microphone access are mandatory
-            </p>
-          </div>
-        </div>
-
+      <div className="space-y-8">
         <div className="flex items-center justify-center space-x-2 mb-8">
-          {(["camera", "audio"] as PermissionStep[]).map((step, index) => {
-            const Icon = getStepIcon(step);
-            const status = stepState[step];
+          {(["screen", "camera", "audio"] as PermissionStep[]).map(
+            (step, index) => {
+              const Icon = getStepIcon(step);
+              const status = stepState[step];
 
-            return (
-              <div key={step} className="flex items-center">
-                <div
-                  className={`
+              return (
+                <div key={step} className="flex items-center">
+                  <div
+                    className={`
                     w-14 h-14 rounded-full flex items-center justify-center border-2 transition-all duration-300
                     ${status === "granted" ? "bg-yellow-500 border-yellow-400" : ""}
                     ${status === "denied" ? "bg-red-600 border-red-500" : ""}
                     ${status === "pending" && currentStep === step ? "border-yellow-500 bg-yellow-600/20" : ""}
-                    ${status === "pending" && currentStep !== step ? "border-gray-600 bg-gray-800" : ""}
+                    ${status === "pending" && currentStep !== step ? "border-white/20 bg-white/5" : ""}
                     ${status === "requesting" ? "border-yellow-500 bg-yellow-600/20" : ""}
                   `}
-                >
-                  {status === "granted" ? (
-                    <CheckCircle className="w-6 h-6 text-black" />
-                  ) : status === "requesting" ? (
-                    <Loader2 className="w-6 h-6 animate-spin text-yellow-400" />
-                  ) : (
-                    <Icon
-                      className={`w-6 h-6 ${status === "denied" ? "text-white" : "text-gray-400"}`}
+                  >
+                    {status === "granted" ? (
+                      <CheckCircle className="w-6 h-6 text-black" />
+                    ) : status === "requesting" ? (
+                      <Loader2 className="w-6 h-6 animate-spin text-yellow-400" />
+                    ) : (
+                      <Icon
+                        className={`w-6 h-6 ${status === "denied" ? "text-white" : "text-gray-400"}`}
+                      />
+                    )}
+                  </div>
+                  {index < 2 && (
+                    <div
+                      className={`w-12 h-1 mx-1 rounded ${stepState[step] === "granted" ? "bg-yellow-500" : "bg-white/5"}`}
                     />
                   )}
                 </div>
-                {index < 1 && (
-                  <div
-                    className={`w-12 h-1 mx-1 rounded ${stepState[step] === "granted" ? "bg-yellow-500" : "bg-gray-600"}`}
-                  />
-                )}
-              </div>
-            );
-          })}
+              );
+            },
+          )}
         </div>
 
         {allGranted ? (
@@ -205,7 +240,7 @@ export default function StepPermissions({
               <h4 className="text-xl font-semibold text-white">
                 {getStepLabel(currentStep)} Permission
               </h4>
-              <p className="text-gray-400 text-sm max-w-md mx-auto">
+              <p className="text-white/50 text-sm max-w-md mx-auto">
                 {getStepDescription(currentStep)}
               </p>
             </div>
@@ -225,24 +260,24 @@ export default function StepPermissions({
                 getButtonAction()();
               }}
               disabled={isRequesting}
-              className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-4 text-lg rounded-lg shadow-lg shadow-yellow-500/20"
+              className="bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-4 text-lg rounded-md shadow-lg shadow-yellow-500/20 mx-auto flex justify-center"
             >
               {isRequesting ? (
                 <>
                   <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Requesting Permission...
+                  checking...
                 </>
               ) : stepState[currentStep] === "denied" ? (
-                `Retry ${getStepLabel(currentStep)} Permission`
+                `Retry ${getStepLabel(currentStep)}`
               ) : (
-                `Allow ${getStepLabel(currentStep)} Access`
+                `Check ${getStepLabel(currentStep)}`
               )}
             </Button>
           </>
         )}
 
-        <p className="text-center text-xs text-gray-500 mt-6">
-          🔒 Screen recording permission will be requested when the assessment
+        <p className="text-center text-xs text-white/50 mt-6">
+          Screen recording permission will be requested when the assessment
           begins.
         </p>
       </div>

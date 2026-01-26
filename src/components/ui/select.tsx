@@ -35,14 +35,18 @@ function SelectTrigger({
       data-slot="select-trigger"
       data-size={size}
       className={cn(
-        "flex w-full items-center justify-between gap-2 rounded-lg border border-gray-700 bg-gray-900/50 px-3 py-2 text-sm text-white shadow-sm transition-all outline-none",
+        "flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm text-white shadow-sm transition-all outline-none",
         "data-[placeholder]:text-gray-500",
         "focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20",
         "disabled:cursor-not-allowed disabled:opacity-50",
-        "data-[size=default]:h-10 data-[size=sm]:h-8",
+        "data-[size=default]:h-12 data-[size=sm]:h-8",
         "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,
       )}
+      style={{
+        backgroundColor: "rgba(255, 255, 255, 0.05)",
+        borderColor: "rgba(75, 75, 75, 0.8)",
+      }}
       {...props}
     >
       {children}
@@ -74,6 +78,10 @@ function SelectContent({
           className,
         )}
         position={position}
+        style={{
+          backgroundColor: "black",
+          borderColor: "rgba(75, 75, 75, 0.8)",
+        }}
         {...props}
       >
         <SelectScrollUpButton />

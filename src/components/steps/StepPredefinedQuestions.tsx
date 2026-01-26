@@ -51,10 +51,10 @@ export default function StepPredefinedQuestions({
   return (
     <div className="space-y-8">
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-white mb-2">
+        <h2 className="text-2xl font-bold text-yellow-400">
           Predefined Questions
         </h2>
-        <p className="text-gray-400">
+        <p className="text-white/50 text-sm">
           Help us understand your availability and expectations
         </p>
       </div>
@@ -65,7 +65,7 @@ export default function StepPredefinedQuestions({
           name="startDate"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm font-semibold text-gray-300 mb-4 block">
+              <FormLabel className="text-sm font-semibold text-yellow-400/90 mb-4 block">
                 When can you start the internship? *
               </FormLabel>
               <FormControl>
@@ -142,7 +142,7 @@ export default function StepPredefinedQuestions({
           name="weeklyCommitment"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm font-semibold text-gray-300 mb-4 block">
+              <FormLabel className="text-sm font-semibold text-yellow-400/90 mb-4 block">
                 How many hours per week can you dedicate to this internship? *
               </FormLabel>
               <Select onValueChange={field.onChange} value={field.value}>

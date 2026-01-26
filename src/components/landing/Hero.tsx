@@ -47,7 +47,7 @@ const AnimatedCounter = ({
   return (
     <motion.span
       ref={ref}
-      className={`transition-all duration-300 ${isAnimating ? "text-yellow-400 drop-shadow-[0_0_20px_rgba(234,179,8,0.8)]" : ""}`}
+      className={`transition-all duration-300 ${isAnimating ? "drop-shadow-[0_0_20px_rgba(234,179,8,0.8)]" : ""}`}
     >
       {rounded}
     </motion.span>
@@ -227,7 +227,7 @@ export default function Hero({ onStartApplication }: HeroProps) {
                   100+ Applicants
                 </span>
               </p>
-              <p className="text-gray-500 text-xs">
+              <p className="text-white/50 text-xs">
                 who completed the assessment in the last month
               </p>
             </div>
@@ -264,7 +264,7 @@ export default function Hero({ onStartApplication }: HeroProps) {
 
           {/* Subheadline */}
           <p
-            className="text-sm md:text-base text-gray-400 max-w-3xl mb-10 leading-relaxed mx-auto hero-word-animate"
+            className="text-sm md:text-base text-white/50 max-w-3xl mb-10 leading-relaxed mx-auto hero-word-animate"
             style={{ animationDelay: "1s" }}
           >
             Cehpoint's performance-driven model evaluates practical skills for
@@ -296,7 +296,7 @@ export default function Hero({ onStartApplication }: HeroProps) {
                   <AnimatedCounter to={100} />
                   <span>+</span>
                 </div>
-                <div className="text-sm text-gray-500 mt-1 uppercase tracking-wider text-[10px] md:text-sm">
+                <div className="text-sm text-white/50 mt-1 uppercase tracking-wider text-[10px] md:text-sm">
                   Served Clients
                 </div>
               </div>
@@ -307,7 +307,7 @@ export default function Hero({ onStartApplication }: HeroProps) {
                   <AnimatedCounter to={200} />
                   <span>+</span>
                 </div>
-                <div className="text-sm text-gray-500 mt-1 uppercase tracking-wider text-[10px] md:text-sm">
+                <div className="text-sm text-white/50 mt-1 uppercase tracking-wider text-[10px] md:text-sm">
                   Assessments
                 </div>
               </div>
@@ -319,7 +319,7 @@ export default function Hero({ onStartApplication }: HeroProps) {
                   <AnimatedCounter to={15} />
                   <span>k+</span>
                 </div>
-                <div className="text-sm text-gray-500 mt-1 uppercase tracking-wider text-[10px] md:text-sm">
+                <div className="text-sm text-white/50 mt-1 uppercase tracking-wider text-[10px] md:text-sm">
                   Minimum Stipend
                 </div>
               </div>
@@ -330,7 +330,7 @@ export default function Hero({ onStartApplication }: HeroProps) {
                   <AnimatedCounter to={20} />
                   <span>%</span>
                 </div>
-                <div className="text-sm text-gray-500 mt-1 uppercase tracking-wider text-[10px] md:text-sm">
+                <div className="text-sm text-white/50 mt-1 uppercase tracking-wider text-[10px] md:text-sm">
                   Selection Rate
                 </div>
               </div>

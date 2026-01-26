@@ -11,7 +11,11 @@ interface StepperProps {
   completedSteps?: number[];
 }
 
-export function Stepper({ steps, currentStep, completedSteps = [] }: StepperProps) {
+export function Stepper({
+  steps,
+  currentStep,
+  completedSteps = [],
+}: StepperProps) {
   const getStepStatus = (stepId: number) => {
     if (completedSteps.includes(stepId)) {
       return "completed";
@@ -33,16 +37,16 @@ export function Stepper({ steps, currentStep, completedSteps = [] }: StepperProp
               <div
                 className={`flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full border-2 shrink-0 transition-colors ${
                   status === "completed"
-                    ? "bg-emerald-500 border-emerald-500 text-white"
+                    ? "bg-yellow-500 border-yellow-500 text-black"
                     : status === "in-progress"
-                    ? "bg-white border-blue-500 text-blue-500"
-                    : "bg-sky-200 border-sky-200 text-white"
+                      ? "bg-yellow-500/20 border-yellow-500 text-yellow-400"
+                      : "bg-white/5 backdrop-blur-md border-white/20 text-gray-500"
                 }`}
               >
                 {status === "completed" ? (
                   <Check className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
                 ) : status === "in-progress" ? (
-                  <div className="w-3 h-3 sm:w-4 sm:h-4 md:w-6 md:h-6 rounded-full bg-blue-500" />
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 md:w-6 md:h-6 rounded-full bg-yellow-500" />
                 ) : (
                   <span className="w-3 h-3 sm:w-4 sm:h-4 md:w-6 md:h-6" />
                 )}
@@ -53,18 +57,19 @@ export function Stepper({ steps, currentStep, completedSteps = [] }: StepperProp
                   <div className="h-1 flex">
                     <div
                       className={`flex-1 ${
-                        status === "completed" ? "bg-emerald-500" : "bg-sky-100"
+                        status === "completed" ? "bg-yellow-500" : "bg-white/5"
                       }`}
                     />
                     <div
                       className={`flex-1 ${
                         status === "completed" &&
                         getStepStatus(steps[index + 1]?.id) === "in-progress"
-                          ? "bg-blue-500"
+                          ? "bg-yellow-500"
                           : status === "completed" &&
-                            getStepStatus(steps[index + 1]?.id) === "completed"
-                          ? "bg-emerald-500"
-                          : "bg-sky-100"
+                              getStepStatus(steps[index + 1]?.id) ===
+                                "completed"
+                            ? "bg-yellow-500"
+                            : "bg-white/5"
                       }`}
                     />
                   </div>
@@ -81,23 +86,23 @@ export function Stepper({ steps, currentStep, completedSteps = [] }: StepperProp
 
           return (
             <div key={`label-${step.id}`} className="w-full px-1">
-              <div className="font-medium text-gray-800 line-clamp-2 text-[2vw] sm:text-sm uppercase">
+              <div className="font-medium text-white line-clamp-2 text-[2vw] sm:text-sm uppercase">
                 {step.title}
               </div>
               <div
                 className={`text-[1.6vw] sm:text-xs ${
                   status === "completed"
-                    ? "text-emerald-500"
+                    ? "text-yellow-400"
                     : status === "in-progress"
-                    ? "text-blue-500"
-                    : "text-gray-400"
+                      ? "text-yellow-500"
+                      : "text-white/50"
                 }`}
               >
                 {status === "completed"
                   ? "Completed"
                   : status === "in-progress"
-                  ? "In Progress"
-                  : "Pending"}
+                    ? "In Progress"
+                    : "Pending"}
               </div>
             </div>
           );

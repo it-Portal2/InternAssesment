@@ -43,6 +43,7 @@ export default function ModalApplicationForm({
     next,
     prev,
     setIsSubmitted,
+    reset,
   } = useApplicationStore();
 
   const [isNextDisabled, setIsNextDisabled] = useState(true);
@@ -263,6 +264,24 @@ export default function ModalApplicationForm({
   }, [open]);
 
   const handleClose = () => {
+    // Exit fullscreen if active
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(console.error);
+    }
+
+    // If form was submitted, reset everything
+    if (isSubmitted) {
+      // Reset store state
+      reset();
+
+      // Clear localStorage
+      localStorage.removeItem("uploadedFileInfo");
+      localStorage.removeItem("application-store");
+
+      // Reset form
+      form.reset();
+    }
+
     onOpenChange(false);
   };
 
@@ -356,7 +375,10 @@ export default function ModalApplicationForm({
           <X className="h-4 w-4" />
         </Button>
 
-        <div className="flex flex-col overflow-y-auto min-h-0">
+        <div
+          className="flex flex-col overflow-y-auto min-h-0"
+          data-lenis-prevent
+        >
           <div className="p-4 sm:p-6 md:p-8">
             {!isSubmitted && (
               <div className="mb-6 sm:mb-8">
@@ -381,7 +403,7 @@ export default function ModalApplicationForm({
                   variant="outline"
                   onClick={prev}
                   disabled={currentStep === 1}
-                  className="flex items-center justify-center space-x-2 w-full sm:w-auto order-2 sm:order-1 border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10 hover:border-yellow-500 disabled:border-gray-700 disabled:text-gray-600 disabled:hover:bg-transparent transition-colors duration-200"
+                  className="flex items-center justify-center space-x-2 w-full sm:w-auto order-2 sm:order-1 bg-transparent border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10 hover:border-yellow-500 hover:text-yellow-400 disabled:border-gray-700 disabled:text-gray-600 disabled:bg-transparent disabled:hover:bg-transparent transition-colors duration-200"
                 >
                   <ChevronLeft className="h-4 w-4" />
                   <span>Back</span>

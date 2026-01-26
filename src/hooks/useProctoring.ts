@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
+import { checkMultipleScreens } from "@/utils/screenDetection";
 
 interface UseProctoringProps {
   isActive: boolean;
@@ -266,40 +267,47 @@ export const useProctoring = ({
   // =====================================================
   // MULTIPLE MONITOR DETECTION
   // =====================================================
+  // =====================================================
+  // MULTIPLE MONITOR DETECTION
+  // =====================================================
+  const [hasMultipleScreens, setHasMultipleScreens] = useState(false);
+
+  const checkScreenCount = useCallback(async () => {
+    try {
+      const isMultiple = await checkMultipleScreens();
+      setHasMultipleScreens(isMultiple);
+      return isMultiple;
+    } catch (e) {
+      console.error("Screen check error:", e);
+      setHasMultipleScreens(false);
+      return false;
+    }
+  }, []);
+
   useEffect(() => {
     if (!isActive) return;
 
-    const checkMultipleMonitors = () => {
-      // Method 1: Check screen.isExtended (Chrome 93+)
-      if ("isExtended" in window.screen && (window.screen as any).isExtended) {
-        toast.warning("Multiple Monitors Detected", {
-          description:
-            "Please disconnect external displays for fair assessment.",
-          duration: 10000,
-        });
-      }
-
-      // Method 2: Screen dimensions check
-      const screenWidth = window.screen.width;
-      const availWidth = window.screen.availWidth;
-
-      // If available width is much larger, might indicate extended display
-      if (availWidth > screenWidth * 1.5) {
-        toast.warning("Extended Display Detected", {
-          description: "Please use only your primary monitor.",
-          duration: 10000,
-        });
-      }
-    };
-
     // Check on start
-    checkMultipleMonitors();
+    checkScreenCount();
 
     // Listen for screen changes
+    const handleScreenChange = () => {
+      checkScreenCount();
+    };
+
     if ("onchange" in window.screen) {
-      (window.screen as any).onchange = checkMultipleMonitors;
+      (window.screen as any).onchange = handleScreenChange;
     }
-  }, [isActive]);
+
+    // Also try to listen to the newer API events if possible
+    // This is complex so we rely mainly on periodic checks or the screen.onchange
+
+    return () => {
+      if ("onchange" in window.screen) {
+        (window.screen as any).onchange = null;
+      }
+    };
+  }, [isActive, checkScreenCount]);
 
   // =====================================================
   // VM DETECTION HINTS
@@ -551,5 +559,7 @@ export const useProctoring = ({
     violationCount,
     isFullscreen,
     enterFullscreen,
+    hasMultipleScreens,
+    checkScreenCount,
   };
 };

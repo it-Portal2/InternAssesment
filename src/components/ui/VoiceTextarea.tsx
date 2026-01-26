@@ -38,20 +38,18 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
 
   const handleCopyPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     e.preventDefault();
-     toast.error("Copy and paste are disabled for this field");
+    toast.error("Copy and paste are disabled for this field");
   };
 
-  // Auto-resize textarea height based on content
   const adjustTextareaHeight = () => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
-      const maxHeight = 200; // Maximum height in pixels
+      const maxHeight = 200;
       const newHeight = Math.min(textareaRef.current.scrollHeight, maxHeight);
       textareaRef.current.style.height = `${newHeight}px`;
     }
   };
 
-  // Clear silence timer
   const clearSilenceTimer = () => {
     if (silenceTimeoutRef.current) {
       clearTimeout(silenceTimeoutRef.current);
@@ -59,7 +57,6 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
     }
   };
 
-  // Start silence timer
   const startSilenceTimer = () => {
     clearSilenceTimer();
     silenceTimeoutRef.current = setTimeout(() => {
@@ -77,7 +74,6 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
     }, silenceTimeout);
   };
 
-  // Initialize speech recognition
   useEffect(() => {
     if (!isSupported) return;
 
@@ -145,7 +141,6 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
     };
   }, [isSupported, language, silenceTimeout]);
 
-  // Adjust height when content changes
   useEffect(() => {
     adjustTextareaHeight();
   }, [value, transcript]);
@@ -194,10 +189,11 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
           onPaste={handleCopyPaste}
           onCut={handleCopyPaste}
           className={cn(
-            "w-full p-3 border border-gray-300 rounded-md resize-none",
-            "focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+            "w-full p-3 border bg-white/5 border-white/20 backdrop-blur-md text-white rounded-lg resize-none",
+            "focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500",
+            "placeholder:text-gray-500",
             "overflow-hidden break-words whitespace-pre-wrap",
-            className
+            className,
           )}
           style={{
             wordWrap: "break-word",
@@ -231,20 +227,30 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
           onPaste={handleCopyPaste}
           onCut={handleCopyPaste}
           className={cn(
-            // Base styles
-            "w-full p-3 pr-12 border rounded-md resize-none",
-            "focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
-            // Text wrapping styles - CRITICAL
+            "w-full p-3 pr-12 rounded-lg resize-none text-white",
+            "focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500",
+            "placeholder:text-gray-500",
             "break-words whitespace-pre-wrap overflow-hidden",
-            // State-based styling
             error
-              ? "border-red-300 bg-red-50"
+              ? "border-red-500/50"
               : isListening
-              ? "border-blue-300 bg-blue-50"
-              : "border-gray-300",
-            className
+                ? "border-yellow-500/50"
+                : "",
+            className,
           )}
           style={{
+            backgroundColor: error
+              ? "rgba(127, 29, 29, 0.2)"
+              : isListening
+                ? "rgba(234, 179, 8, 0.1)"
+                : "rgba(255, 255, 255, 0.05)",
+            borderColor: error
+              ? "rgba(239, 68, 68, 0.5)"
+              : isListening
+                ? "rgba(234, 179, 8, 0.5)"
+                : "rgba(75, 75, 75, 0.8)",
+            borderWidth: "1px",
+            borderStyle: "solid",
             wordWrap: "break-word",
             overflowWrap: "break-word",
             whiteSpace: "pre-wrap",
@@ -253,7 +259,7 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
             minHeight: `${rows * 1.5}rem`,
             maxHeight: "200px",
             overflowY: "auto",
-            overflowX: "hidden", 
+            overflowX: "hidden",
             width: "100%",
             boxSizing: "border-box",
           }}
@@ -265,29 +271,27 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
             variant="outline"
             size="sm"
             onClick={isListening ? stopListening : startListening}
-            className="h-8 w-8 p-0 shadow-sm bg-white/90 backdrop-blur-sm hover:bg-white"
+            className="h-8 w-8 p-0 shadow-sm bg-white/5 border-white/20 backdrop-blur-md hover:bg-gray-700 hover:border-yellow-500"
           >
             {isListening ? (
-              <Square className="h-4 w-4 text-blue-600" />
+              <Square className="h-4 w-4 text-yellow-400" />
             ) : (
-              <Mic className="h-4 w-4" />
+              <Mic className="h-4 w-4 text-yellow-400" />
             )}
           </Button>
         </div>
       </div>
 
-      {/* Status messages */}
-
       {isListening && (
-        <div className="flex items-center space-x-1 text-blue-600 text-xs">
+        <div className="flex items-center space-x-1 text-yellow-400 text-xs">
           <div className="animate-pulse">
-            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+            <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
           </div>
           <span>Listening...</span>
         </div>
       )}
 
-      {error && <div className="text-red-500 text-xs">{error}</div>}
+      {error && <div className="text-red-400 text-xs">{error}</div>}
     </div>
   );
 };

@@ -55,15 +55,15 @@ export default function TransparencySection() {
 
   const videos = [
     {
-      url: "https://res.cloudinary.com/dvparynza/video/upload/v1765466317/interview-recordings/interview-recordings/interview_Jagan_Mohan_Reddy_1765466308026.webm",
+      url: "https://res.cloudinary.com/dvparynza/video/upload/so_30,eo_60/v1765466317/interview-recordings/interview-recordings/interview_Jagan_Mohan_Reddy_1765466308026.webm",
       featured: true,
     },
     {
-      url: "https://res.cloudinary.com/dvparynza/video/upload/v1765459989/interview-recordings/interview-recordings/interview_Giridhar_J_1765459978225.webm",
+      url: "https://res.cloudinary.com/dvparynza/video/upload/so_0,eo_10/v1765459989/interview-recordings/interview-recordings/interview_Giridhar_J_1765459978225.webm",
       featured: false,
     },
     {
-      url: "https://res.cloudinary.com/dvparynza/video/upload/v1767710314/interview-recordings/interview-recordings/interview_adviti_gangwar_1767710267342.webm",
+      url: "https://res.cloudinary.com/dvparynza/video/upload/so_60,eo_100/v1767710314/interview-recordings/interview-recordings/interview_adviti_gangwar_1767710267342.webm",
       featured: false,
     },
   ];
@@ -86,7 +86,7 @@ export default function TransparencySection() {
           <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-3 sm:mb-4">
             "They Call Us <span className="text-yellow-400">Scam</span>"
           </h2>
-          <p className="text-gray-400 max-w-2xl mx-auto text-xs sm:text-sm md:text-base">
+          <p className="text-white/50 max-w-2xl mx-auto text-xs sm:text-sm md:text-base">
             Let the recordings speak for themselves.
           </p>
         </motion.div>
@@ -153,7 +153,7 @@ export default function TransparencySection() {
             We don't claim.{" "}
             <span className="text-yellow-400">We document.</span>
           </p>
-          <p className="text-gray-500 text-xs sm:text-sm mt-2">
+          <p className="text-white/50 text-xs sm:text-sm mt-2">
             Every session is recorded. Here's the evidence.
           </p>
         </motion.div>
@@ -252,7 +252,7 @@ export default function TransparencySection() {
           transition={{ delay: 0.5 }}
           className="mt-8 md:mt-12 text-center"
         >
-          <p className="text-gray-500 text-xs sm:text-sm max-w-xl mx-auto px-4">
+          <p className="text-white/50 text-xs sm:text-sm max-w-xl mx-auto px-4">
             All recordings are stored securely and used solely for evaluation
             transparency. When someone calls us a "scam" — we show the evidence.
           </p>

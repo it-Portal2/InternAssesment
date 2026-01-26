@@ -25,12 +25,13 @@ function RadioGroupItem({
     <RadioGroupPrimitive.Item
       data-slot="radio-group-item"
       className={cn(
-        "aspect-square size-5 shrink-0 rounded-full border-2 border-gray-600 bg-gray-900/50 shadow-sm transition-all outline-none",
+        "aspect-square size-5 shrink-0 rounded-full border-2 bg-white/5 backdrop-blur-md border-white/10 shadow-sm transition-all outline-none",
         "data-[state=checked]:border-yellow-500 data-[state=checked]:bg-yellow-500",
         "focus-visible:ring-2 focus-visible:ring-yellow-500/20 focus-visible:border-yellow-500",
         "disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
+      
       {...props}
     >
       <RadioGroupPrimitive.Indicator

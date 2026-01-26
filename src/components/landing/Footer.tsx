@@ -39,7 +39,7 @@ export default function Footer({ onStartApplication }: FooterProps) {
                 <h2 className="text-lg sm:text-2xl font-semibold text-white tracking-tight">
                   InternAssessment
                 </h2>
-                <p className="text-[10px] sm:text-xs text-gray-400">
+                <p className="text-[10px] sm:text-xs text-white/50">
                   By <span className="text-yellow-400">Cehpoint</span>
                 </p>
               </div>
@@ -58,7 +58,7 @@ export default function Footer({ onStartApplication }: FooterProps) {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-gray-400 text-xs sm:text-sm max-w-sm leading-relaxed"
+            className="text-white/50 text-xs sm:text-sm max-w-sm leading-relaxed"
           >
             Performance-driven hiring aligned with real-world business needs.
             Assessments evaluate practical skills under realistic conditions.
@@ -71,10 +71,10 @@ export default function Footer({ onStartApplication }: FooterProps) {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            href="https://cehpoint.co.in"
+            href="https://www.cehpoint.co.in"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-between py-4 sm:py-6 border-t border-white/10 text-gray-400 hover:text-white transition-colors"
+            className="flex items-center justify-between py-4 sm:py-6 border-t border-white/10 text-white/50 hover:text-white transition-colors"
           >
             <span className="text-xs sm:text-sm">Website</span>
             <Globe className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -85,8 +85,8 @@ export default function Footer({ onStartApplication }: FooterProps) {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: 0.3 }}
-            href="mailto:internships@cehpoint.com"
-            className="flex items-center justify-between py-4 sm:py-6 border-t border-white/10 text-gray-400 hover:text-white transition-colors"
+            href="mailto:internship@cehpoint.co.in"
+            className="flex items-center justify-between py-4 sm:py-6 border-t border-white/10 text-white/50 hover:text-white transition-colors"
           >
             <span className="text-xs sm:text-sm">Email</span>
             <Mail className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -97,10 +97,10 @@ export default function Footer({ onStartApplication }: FooterProps) {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: 0.4 }}
-            href="https://linkedin.com/company/cehpoint"
+            href="https://www.linkedin.com/company/cehpoint"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-between py-4 sm:py-6 border-t border-white/10 text-gray-400 hover:text-white transition-colors"
+            className="flex items-center justify-between py-4 sm:py-6 border-t border-white/10 text-white/50 hover:text-white transition-colors"
           >
             <span className="text-xs sm:text-sm">LinkedIn</span>
             <Linkedin className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -114,7 +114,7 @@ export default function Footer({ onStartApplication }: FooterProps) {
           transition={{ duration: 0.6, delay: 0.5 }}
           className="py-4 sm:py-6"
         >
-          <p className="text-xs sm:text-sm text-gray-500 text-center">
+          <p className="text-xs sm:text-sm text-white/50 text-center">
             © {currentYear} — All rights reserved by Cehpoint
           </p>
         </motion.div>

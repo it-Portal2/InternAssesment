@@ -99,7 +99,7 @@ export default function ReviewsMarquee() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6, delay: 0.2 }}
-          className="text-gray-400 max-w-2xl mx-auto text-sm md:text-base"
+          className="text-white/50 max-w-2xl mx-auto text-sm md:text-base"
         >
           Real feedback from candidates who went through our assessment process.
         </motion.p>

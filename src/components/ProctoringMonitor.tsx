@@ -43,7 +43,7 @@ export default function ProctoringMonitor({
   }, []);
 
   return (
-    <div className="fixed top-4 right-4 z-50 flex flex-col items-end space-y-2 pointer-events-none">
+    <div className="fixed top-4 right-4 z-[200] flex flex-col items-end space-y-2 pointer-events-none">
       {/* Video Feed Monitor */}
       <div
         className={cn(
