@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { User } from "lucide-react";
 
 interface Testimonial {
   id: number;
@@ -56,11 +57,9 @@ function TestimonialCard({ testimonial }: { testimonial: Testimonial }) {
           "{testimonial.text}"
         </p>
         <div className="flex items-center gap-3">
-          <img
-            src={testimonial.avatar}
-            alt={testimonial.name}
-            className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover border-2 border-yellow-500/30"
-          />
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/5 backdrop-blur-md border border-yellow-500/50 flex items-center justify-center shrink-0">
+            <User className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" />
+          </div>
           <span className="text-white font-medium text-xs sm:text-sm">
             {testimonial.name}
           </span>

@@ -11,6 +11,7 @@ import {
   useMotionValue,
   useTransform,
 } from "framer-motion";
+import { User } from "lucide-react";
 
 interface HeroProps {
   onStartApplication: () => void;
@@ -114,14 +115,6 @@ const heroAnimationStyles = `
 `;
 
 export default function Hero({ onStartApplication }: HeroProps) {
-  const avatars = [
-    "https://i.pravatar.cc/100?u=a042581f4e29026704d",
-    "https://i.pravatar.cc/100?u=a042581f4e29026704e",
-    "https://i.pravatar.cc/100?u=a042581f4e29026704c",
-    "https://i.pravatar.cc/100?u=2",
-    "https://i.pravatar.cc/100?u=1",
-  ];
-
   // Mouse gradient state
   const [mousePos, setMousePos] = useState({ x: 0, y: 0, opacity: 0 });
 
@@ -205,16 +198,12 @@ export default function Hero({ onStartApplication }: HeroProps) {
           <div className="flex items-center justify-center gap-4 mb-4">
             {/* Avatar Stack */}
             <div className="flex -space-x-2">
-              {avatars.slice(0, 4).map((avatar, i) => (
+              {[...Array(4)].map((_, i) => (
                 <div
                   key={i}
-                  className="relative w-8 h-8 rounded-full border-2 border-black overflow-hidden"
+                  className="relative w-8 h-8 rounded-full bg-white/5 backdrop-blur-md border border-yellow-500/50 flex items-center justify-center overflow-hidden"
                 >
-                  <img
-                    src={avatar}
-                    alt={`Applicant ${i + 1}`}
-                    className="w-full h-full object-cover"
-                  />
+                  <User className="w-4 h-4 text-yellow-400" />
                 </div>
               ))}
             </div>
