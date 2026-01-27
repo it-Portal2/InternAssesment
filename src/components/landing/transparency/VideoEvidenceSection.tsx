@@ -110,7 +110,7 @@ export const VideoEvidenceSection = ({
                 Hidden Helper Detected
               </span>
               <TextGenerateEffect
-                words="Second person visible behind camera, who turned of the camera and helping form behind the camera."
+                words="Candidate is receiving external assistance during the interview. A second person was observed behind the camera providing help, after which the camera was turned off. The candidate also used another device to obtain and read answers in real time."
                 className="text-white text-xl sm:text-2xl font-semibold"
               />
             </div>
