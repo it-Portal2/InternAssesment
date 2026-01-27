@@ -9,7 +9,7 @@ export const videos = [
     featured: true,
   },
   {
-    url: "https://res.cloudinary.com/dvparynza/video/upload/so_0,eo_60/v1765459989/interview-recordings/interview-recordings/interview_Giridhar_J_1765459978225.webm",
+    url: "https://res.cloudinary.com/dvparynza/video/upload/so_0,eo_75/v1765459989/interview-recordings/interview-recordings/interview_Giridhar_J_1765459978225.webm",
     icon: Users,
     title: "Hidden Helper",
     subtitle: "Second person behind camera",

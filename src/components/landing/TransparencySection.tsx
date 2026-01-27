@@ -19,7 +19,7 @@ export default function TransparencySection() {
       <div className="absolute top-0 left-1/4 w-64 sm:w-96 h-64 sm:h-96 bg-yellow-500/5 rounded-full blur-[100px] sm:blur-[150px]" />
       <div className="absolute bottom-0 right-1/4 w-52 sm:w-80 h-52 sm:h-80 bg-amber-500/5 rounded-full blur-[80px] sm:blur-[120px]" />
 
-      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6">
+      <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-12">
         <ExpectationsSection />
         <EmailAlertsSection setActiveImage={setActiveImage} />
         <ClaimVsRealitySection />
