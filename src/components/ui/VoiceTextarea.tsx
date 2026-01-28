@@ -24,13 +24,17 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
   className = "",
 }) => {
   const [isListening, setIsListening] = useState(false);
-  const [transcript, setTranscript] = useState("");
+  const [interimTranscript, setInterimTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isListeningRef = useRef<boolean>(false);
+  // Track the base value when listening started - this is key for preserving text
+  const baseValueRef = useRef<string>("");
+  // Track all finalized transcripts during this listening session
+  const finalizedTranscriptRef = useRef<string>("");
 
   const isSupported =
     typeof window !== "undefined" &&
@@ -57,6 +61,18 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
     }
   };
 
+  const commitTranscript = () => {
+    // Combine base value + all finalized text from this session
+    const finalText = finalizedTranscriptRef.current.trim();
+    if (finalText) {
+      const newValue =
+        baseValueRef.current + (baseValueRef.current ? " " : "") + finalText;
+      onChange(newValue);
+    }
+    setInterimTranscript("");
+    finalizedTranscriptRef.current = "";
+  };
+
   const startSilenceTimer = () => {
     clearSilenceTimer();
     silenceTimeoutRef.current = setTimeout(() => {
@@ -64,12 +80,7 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
         setIsListening(false);
         isListeningRef.current = false;
         recognitionRef.current.stop();
-
-        if (transcript) {
-          const finalContent = value + (value ? " " : "") + transcript;
-          onChange(finalContent);
-          setTranscript("");
-        }
+        commitTranscript();
       }
     }, silenceTimeout);
   };
@@ -94,21 +105,26 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
     };
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let finalTranscript = "";
-      let interimTranscript = "";
+      let sessionFinal = "";
+      let sessionInterim = "";
 
-      for (let i = event.resultIndex; i < event.results.length; i++) {
+      // Process ALL results from the beginning to build complete transcript
+      for (let i = 0; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
-          finalTranscript += result[0].transcript;
+          sessionFinal += result[0].transcript;
         } else {
-          interimTranscript += result[0].transcript;
+          sessionInterim += result[0].transcript;
         }
       }
 
-      setTranscript(finalTranscript + interimTranscript);
+      // Store all finalized text
+      finalizedTranscriptRef.current = sessionFinal;
+      // Show interim text separately (this is what user is currently saying)
+      setInterimTranscript(sessionInterim);
 
-      if (finalTranscript || interimTranscript) {
+      // Reset silence timer on any speech activity
+      if (sessionFinal || sessionInterim) {
         startSilenceTimer();
       }
     };
@@ -123,12 +139,7 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
       setIsListening(false);
       isListeningRef.current = false;
       clearSilenceTimer();
-
-      if (transcript) {
-        const finalContent = value + (value ? " " : "") + transcript;
-        onChange(finalContent);
-        setTranscript("");
-      }
+      commitTranscript();
     };
 
     recognitionRef.current = recognition;
@@ -143,12 +154,15 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
 
   useEffect(() => {
     adjustTextareaHeight();
-  }, [value, transcript]);
+  }, [value, interimTranscript]);
 
   const startListening = () => {
     if (!recognitionRef.current || isListening) return;
 
-    setTranscript("");
+    // Store the current value as the base - this preserves existing text
+    baseValueRef.current = value;
+    finalizedTranscriptRef.current = "";
+    setInterimTranscript("");
     setError(null);
 
     try {
@@ -165,16 +179,20 @@ export const VoiceTextarea: React.FC<VoiceTextareaProps> = ({
     setIsListening(false);
     isListeningRef.current = false;
     recognitionRef.current.stop();
-
-    if (transcript) {
-      const finalContent = value + (value ? " " : "") + transcript;
-      onChange(finalContent);
-      setTranscript("");
-    }
+    commitTranscript();
   };
 
-  const displayValue =
-    value + (isListening && transcript ? (value ? " " : "") + transcript : "");
+  // Build display value: base + finalized + interim (all accumulated properly)
+  const displayValue = isListening
+    ? baseValueRef.current +
+      (baseValueRef.current &&
+      (finalizedTranscriptRef.current || interimTranscript)
+        ? " "
+        : "") +
+      finalizedTranscriptRef.current +
+      (finalizedTranscriptRef.current && interimTranscript ? " " : "") +
+      interimTranscript
+    : value;
 
   if (!isSupported) {
     return (
