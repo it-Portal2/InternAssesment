@@ -32,19 +32,34 @@ export default function StepCommentsAndSubmit({
   const { stopAndUpload, isRecording, cleanup } = useRecording();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const restartExam = () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    cleanup();
+    window.location.href = "/";
+  };
+
   const handleSubmit = async (data: InsertApplicationForm) => {
     setIsSubmitting(true);
     console.log("[Submit] Starting submission...");
 
     try {
-      let recordingUrl: string | null = null;
-      if (isRecording) {
-        console.log("[Submit] Stopping and uploading recording...");
-        toast.info("Uploading recording...", { duration: 3000 });
-        recordingUrl = await stopAndUpload();
-        console.log("[Submit] Recording URL:", recordingUrl);
-      } else {
-        cleanup();
+      // Recording is MANDATORY - always try to upload
+      console.log("[Submit] Stopping and uploading recording...");
+      toast.info("Uploading your interview recording...", { duration: 5000 });
+
+      const recordingUrl = await stopAndUpload();
+      console.log("[Submit] Recording URL:", recordingUrl);
+
+      // BLOCK submission if no recording
+      if (!recordingUrl) {
+        toast.error("Recording upload failed", {
+          description:
+            "Your interview recording could not be uploaded. Please try again.",
+          duration: 8000,
+        });
+        setIsSubmitting(false);
+        return; // DO NOT PROCEED
       }
 
       const aiQuestionsWithAnswers = aiQuestions.map((q) => ({
@@ -77,7 +92,7 @@ export default function StepCommentsAndSubmit({
               education: "Not specified",
               summary: "No resume analysis available",
             },
-        recordingUrl: recordingUrl || null,
+        recordingUrl: recordingUrl, // Now guaranteed to exist
         applicationStatus: "Pending",
         createdAt: serverTimestamp(),
       };
@@ -94,12 +109,10 @@ export default function StepCommentsAndSubmit({
         duration: 6000,
       });
 
-      if (recordingUrl) {
-        toast.success("Recording saved!", {
-          description: "Your proctoring video has been uploaded.",
-          duration: 3000,
-        });
-      }
+      toast.success("Recording saved!", {
+        description: "Your proctoring video has been uploaded.",
+        duration: 3000,
+      });
 
       reset();
       form.reset();
@@ -107,11 +120,13 @@ export default function StepCommentsAndSubmit({
     } catch (error) {
       console.error("[Submit] Error:", error);
       cleanup();
-      toast.error("Submission failed", {
+      toast.error("Submission failed - Exam will restart", {
         description:
-          "There was an error submitting your application. Please try again.",
-        duration: 6000,
+          "There was a critical error. Your exam will restart. Please try again.",
+        duration: 8000,
       });
+      // Restart exam on Firestore failure
+      setTimeout(restartExam, 3000);
     } finally {
       setIsSubmitting(false);
     }

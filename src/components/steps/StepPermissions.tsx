@@ -6,19 +6,26 @@ import {
   Loader2,
   CheckCircle,
   Monitor,
+  Globe,
+  Chrome,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useApplicationStore } from "@/store/useApplicationStore";
 import { checkMultipleScreens } from "@/utils/screenDetection";
+import {
+  checkBrowserSupport,
+  getRecommendedBrowsers,
+} from "@/utils/browserSupport";
 
 interface StepPermissionsProps {
   onAllPermissionsGranted: () => void;
 }
 
-type PermissionStep = "screen" | "camera" | "audio";
+type PermissionStep = "browser" | "screen" | "camera" | "audio";
 type StepStatus = "pending" | "requesting" | "granted" | "denied";
 
 interface StepState {
+  browser: StepStatus;
   screen: StepStatus;
   camera: StepStatus;
   audio: StepStatus;
@@ -31,13 +38,14 @@ export default function StepPermissions({
     useApplicationStore();
 
   const [stepState, setStepState] = useState<StepState>({
+    browser: isAllPermissionsApproved ? "granted" : "pending", // Start as pending
     screen: isAllPermissionsApproved ? "granted" : "pending",
     camera: isAllPermissionsApproved ? "granted" : "pending",
     audio: isAllPermissionsApproved ? "granted" : "pending",
   });
 
   const [currentStep, setCurrentStep] = useState<PermissionStep>(
-    isAllPermissionsApproved ? "audio" : "screen",
+    isAllPermissionsApproved ? "audio" : "browser", // Start on browser step
   );
 
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +56,8 @@ export default function StepPermissions({
   // If we are mounting and permissions aren't approved, calculate the correct starting step
   useEffect(() => {
     if (!isAllPermissionsApproved) {
-      if (stepState.screen !== "granted") setCurrentStep("screen");
+      if (stepState.browser !== "granted") setCurrentStep("browser");
+      else if (stepState.screen !== "granted") setCurrentStep("screen");
       else if (stepState.camera !== "granted") setCurrentStep("camera");
       else if (stepState.audio !== "granted") setCurrentStep("audio");
     }
@@ -56,6 +65,20 @@ export default function StepPermissions({
 
   const updateStepStatus = (step: PermissionStep, status: StepStatus) => {
     setStepState((prev) => ({ ...prev, [step]: status }));
+  };
+
+  const checkBrowser = () => {
+    setError(null);
+    updateStepStatus("browser", "requesting");
+
+    const result = checkBrowserSupport();
+    if (result.supported) {
+      updateStepStatus("browser", "granted");
+      setCurrentStep("screen");
+    } else {
+      updateStepStatus("browser", "denied");
+      setError(result.reason || "Browser not supported for screen recording");
+    }
   };
 
   const requestScreenCheck = async () => {
@@ -118,6 +141,8 @@ export default function StepPermissions({
 
   const getStepIcon = (step: PermissionStep) => {
     switch (step) {
+      case "browser":
+        return Globe;
       case "screen":
         return Monitor;
       case "camera":
@@ -129,6 +154,8 @@ export default function StepPermissions({
 
   const getStepLabel = (step: PermissionStep) => {
     switch (step) {
+      case "browser":
+        return "Browser";
       case "screen":
         return "Screen Check";
       case "camera":
@@ -140,6 +167,8 @@ export default function StepPermissions({
 
   const getStepDescription = (step: PermissionStep) => {
     switch (step) {
+      case "browser":
+        return "Your browser must support screen recording for this assessment.";
       case "screen":
         return "We need to ensure you are using a single monitor for a fair assessment.";
       case "camera":
@@ -151,6 +180,8 @@ export default function StepPermissions({
 
   const getButtonAction = () => {
     switch (currentStep) {
+      case "browser":
+        return checkBrowser;
       case "screen":
         return requestScreenCheck;
       case "camera":
@@ -162,10 +193,13 @@ export default function StepPermissions({
 
   const isRequesting = stepState[currentStep] === "requesting";
   const allGranted =
+    stepState.browser === "granted" &&
     stepState.screen === "granted" &&
     stepState.camera === "granted" &&
     stepState.audio === "granted";
+  const isBrowserBlocked = stepState.browser === "denied";
   const StepIcon = getStepIcon(currentStep);
+  const recommendedBrowsers = getRecommendedBrowsers();
 
   return (
     <div className="space-y-8">
@@ -180,7 +214,7 @@ export default function StepPermissions({
 
       <div className="space-y-8">
         <div className="flex items-center justify-center space-x-2 mb-8">
-          {(["screen", "camera", "audio"] as PermissionStep[]).map(
+          {(["browser", "screen", "camera", "audio"] as PermissionStep[]).map(
             (step, index) => {
               const Icon = getStepIcon(step);
               const status = stepState[step];
@@ -189,7 +223,7 @@ export default function StepPermissions({
                 <div key={step} className="flex items-center">
                   <div
                     className={`
-                    w-14 h-14 rounded-full flex items-center justify-center border-2 transition-all duration-300
+                    w-12 h-12 rounded-full flex items-center justify-center border-2 transition-all duration-300
                     ${status === "granted" ? "bg-yellow-500 border-yellow-400" : ""}
                     ${status === "denied" ? "bg-red-600 border-red-500" : ""}
                     ${status === "pending" && currentStep === step ? "border-yellow-500 bg-yellow-600/20" : ""}
@@ -198,18 +232,18 @@ export default function StepPermissions({
                   `}
                   >
                     {status === "granted" ? (
-                      <CheckCircle className="w-6 h-6 text-black" />
+                      <CheckCircle className="w-5 h-5 text-black" />
                     ) : status === "requesting" ? (
-                      <Loader2 className="w-6 h-6 animate-spin text-yellow-400" />
+                      <Loader2 className="w-5 h-5 animate-spin text-yellow-400" />
                     ) : (
                       <Icon
-                        className={`w-6 h-6 ${status === "denied" ? "text-white" : "text-gray-400"}`}
+                        className={`w-5 h-5 ${status === "denied" ? "text-white" : "text-gray-400"}`}
                       />
                     )}
                   </div>
-                  {index < 2 && (
+                  {index < 3 && (
                     <div
-                      className={`w-12 h-1 mx-1 rounded ${stepState[step] === "granted" ? "bg-yellow-500" : "bg-white/5"}`}
+                      className={`w-8 h-1 mx-1 rounded ${stepState[step] === "granted" ? "bg-yellow-500" : "bg-white/5"}`}
                     />
                   )}
                 </div>
@@ -230,6 +264,44 @@ export default function StepPermissions({
               Click Next to proceed. Screen recording will start when you begin
               the assessment.
             </p>
+          </div>
+        ) : isBrowserBlocked ? (
+          // Special UI for unsupported browser
+          <div className="text-center space-y-4">
+            <div className="w-20 h-20 rounded-full bg-red-500/20 flex items-center justify-center mx-auto">
+              <AlertCircle className="w-10 h-10 text-red-400" />
+            </div>
+            <h4 className="text-xl font-semibold text-red-400">
+              Browser Not Supported
+            </h4>
+            <p className="text-white/60 text-sm max-w-md mx-auto">{error}</p>
+
+            <div className="bg-white/5 border border-white/10 rounded-lg p-4 max-w-md mx-auto mt-4">
+              <p className="text-white/60 text-sm mb-3 flex items-center justify-center gap-2">
+                <Chrome className="w-4 h-4" />
+                Please use one of these browsers:
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {recommendedBrowsers.map((browser) => (
+                  <div
+                    key={browser}
+                    className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20"
+                  >
+                    <span className="text-yellow-400 text-sm">{browser}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <a
+              href="https://www.google.com/chrome/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 mt-4 px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold rounded-lg transition-colors"
+            >
+              <Chrome className="w-5 h-5" />
+              Download Google Chrome
+            </a>
           </div>
         ) : (
           <>

@@ -9,21 +9,80 @@ import {
 
 const CLOUDINARY_CLOUD_NAME = "duusiq4ws";
 const CLOUDINARY_UPLOAD_PRESET = "InternAssesment";
+const MAX_RECORDING_DURATION_MS = 20 * 60 * 1000; // 20 minutes
+const DB_NAME = "InterviewRecordingDB";
+const STORE_NAME = "recordings";
 
 interface RecordingContextType {
-  isRecording: boolean;
+  isRecording: boolean; // UI state - stays true even after silent stop
   recordingUrl: string | null;
   error: string | null;
   startRecording: (onScreenShareStop?: () => void) => Promise<boolean>;
   stopRecording: () => Promise<Blob | null>;
   stopAndUpload: () => Promise<string | null>;
   cleanup: () => void;
+  getRecordingBlob: () => Promise<Blob | null>;
 }
 
 const RecordingContext = createContext<RecordingContextType | null>(null);
 
+// IndexedDB helpers
+async function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+  });
+}
+
+async function saveToIndexedDB(blob: Blob): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    store.put(blob, "currentRecording");
+    tx.oncomplete = () => {
+      console.log("[Recording] Saved to IndexedDB:", blob.size, "bytes");
+      resolve();
+    };
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function loadFromIndexedDB(): Promise<Blob | null> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.get("currentRecording");
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function clearIndexedDB(): Promise<void> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    store.delete("currentRecording");
+  } catch (e) {
+    console.log("[Recording] Failed to clear IndexedDB:", e);
+  }
+}
+
 export function RecordingProvider({ children }: { children: ReactNode }) {
-  const [isRecording, setIsRecording] = useState(false);
+  const [isRecording, setIsRecording] = useState(false); // UI state
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,9 +90,51 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
   const chunksRef = useRef<Blob[]>([]);
   const screenStreamRef = useRef<MediaStream | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
+  const savedBlobRef = useRef<Blob | null>(null); // Saved blob after 20 min
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isActuallyRecordingRef = useRef(false); // Actual recording state
+
+  // Silent stop - stops MediaRecorder but keeps streams active
+  const silentStop = useCallback(async (): Promise<Blob | null> => {
+    console.log("[Recording] Silent stop at 20 min...");
+
+    return new Promise((resolve) => {
+      const mediaRecorder = mediaRecorderRef.current;
+
+      if (!mediaRecorder || mediaRecorder.state === "inactive") {
+        resolve(null);
+        return;
+      }
+
+      mediaRecorder.onstop = async () => {
+        const blob = new Blob(chunksRef.current, { type: "video/webm" });
+        console.log("[Recording] Silent stop complete, blob size:", blob.size);
+
+        // Save to IndexedDB as backup
+        await saveToIndexedDB(blob);
+        savedBlobRef.current = blob;
+        isActuallyRecordingRef.current = false;
+
+        // DO NOT set isRecording = false (UI stays showing "Recording")
+        // DO NOT cleanup streams (camera/screen stay active)
+
+        chunksRef.current = [];
+        mediaRecorderRef.current = null;
+        resolve(blob);
+      };
+
+      mediaRecorder.stop();
+    });
+  }, []);
 
   const cleanup = useCallback(() => {
     console.log("[Recording] Cleanup called");
+
+    // Clear timer
+    if (recordingTimerRef.current) {
+      clearTimeout(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
 
     // Stop all tracks
     screenStreamRef.current?.getTracks().forEach((track) => {
@@ -55,6 +156,8 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
     audioStreamRef.current = null;
     mediaRecorderRef.current = null;
     chunksRef.current = [];
+    savedBlobRef.current = null;
+    isActuallyRecordingRef.current = false;
     setIsRecording(false);
   }, []);
 
@@ -63,6 +166,10 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
       console.log("[Recording] Starting recording...");
       setError(null);
       chunksRef.current = [];
+      savedBlobRef.current = null;
+
+      // Clear any previous IndexedDB data
+      await clearIndexedDB();
 
       try {
         // Get audio stream
@@ -73,12 +180,12 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
         audioStreamRef.current = audioStream;
         console.log("[Recording] Audio obtained");
 
-        // Get screen stream
+        // Get screen stream with reduced frame rate
         console.log("[Recording] Requesting screen...");
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
           video: {
             displaySurface: "monitor",
-            frameRate: { ideal: 15, max: 30 },
+            frameRate: { ideal: 10, max: 15 }, // Reduced for smaller file
           },
           audio: true,
         });
@@ -108,14 +215,15 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
 
         console.log("[Recording] Using codec:", mimeType);
 
-        // Create recorder
+        // Create recorder with REDUCED bitrate for 20 min @ 100MB
         const mediaRecorder = new MediaRecorder(combinedStream, {
           mimeType,
-          videoBitsPerSecond: 1500000,
-          audioBitsPerSecond: 128000,
+          videoBitsPerSecond: 600000, // 600 kbps (was 1500000)
+          audioBitsPerSecond: 64000, // 64 kbps (was 128000)
         });
 
         mediaRecorderRef.current = mediaRecorder;
+        isActuallyRecordingRef.current = true;
 
         mediaRecorder.ondataavailable = (event) => {
           if (event.data && event.data.size > 0) {
@@ -139,12 +247,18 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
           if (mediaRecorderRef.current?.state === "recording") {
             mediaRecorderRef.current.stop();
           }
+          isActuallyRecordingRef.current = false;
           setIsRecording(false);
-          // Notify via callback if provided
           if (onScreenShareStop) {
             onScreenShareStop();
           }
         };
+
+        // Set 20-minute timer for silent stop
+        recordingTimerRef.current = setTimeout(() => {
+          console.log("[Recording] 20 min reached, triggering silent stop");
+          silentStop();
+        }, MAX_RECORDING_DURATION_MS);
 
         // Start with chunks every 5 seconds
         mediaRecorder.start(5000);
@@ -161,11 +275,17 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
         return false;
       }
     },
-    [cleanup],
+    [cleanup, silentStop],
   );
 
   const stopRecording = useCallback(async (): Promise<Blob | null> => {
     console.log("[Recording] Stopping recording...");
+
+    // Clear timer if still running
+    if (recordingTimerRef.current) {
+      clearTimeout(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
 
     return new Promise((resolve) => {
       const mediaRecorder = mediaRecorderRef.current;
@@ -189,9 +309,32 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
     });
   }, [cleanup]);
 
+  // Get recording blob - returns saved blob if exists, or stops current recording
+  const getRecordingBlob = useCallback(async (): Promise<Blob | null> => {
+    // First check if we have a saved blob (from 20-min silent stop)
+    if (savedBlobRef.current && savedBlobRef.current.size > 0) {
+      console.log("[Recording] Using saved blob from 20-min stop");
+      return savedBlobRef.current;
+    }
+
+    // Check IndexedDB backup
+    const indexedDBBlob = await loadFromIndexedDB();
+    if (indexedDBBlob && indexedDBBlob.size > 0) {
+      console.log("[Recording] Using blob from IndexedDB");
+      return indexedDBBlob;
+    }
+
+    // Otherwise stop current recording
+    if (isActuallyRecordingRef.current) {
+      return await stopRecording();
+    }
+
+    return null;
+  }, [stopRecording]);
+
   const uploadToCloudinary = async (blob: Blob): Promise<string | null> => {
     console.log("[Recording] Uploading to Cloudinary...");
-    const MAX_RETRIES = 3;
+    const MAX_RETRIES = 5;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
@@ -212,28 +355,40 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
         const data = await response.json();
         console.log("[Recording] Upload success:", data.secure_url);
         setRecordingUrl(data.secure_url);
+
+        // Clear IndexedDB after successful upload
+        await clearIndexedDB();
+
         return data.secure_url;
       } catch (err) {
         console.error(`[Recording] Upload attempt ${attempt} failed:`, err);
         if (attempt < MAX_RETRIES) {
-          await new Promise((r) => setTimeout(r, 2000));
+          // Exponential backoff
+          await new Promise((r) => setTimeout(r, 2000 * attempt));
         }
       }
     }
 
-    setError("Failed to upload recording");
+    setError("Failed to upload recording after 5 attempts");
     return null;
   };
 
   const stopAndUpload = useCallback(async (): Promise<string | null> => {
     console.log("[Recording] Stop and upload...");
-    const blob = await stopRecording();
+
+    const blob = await getRecordingBlob();
+
     if (!blob || blob.size === 0) {
       console.log("[Recording] No blob to upload");
+      cleanup();
       return null;
     }
+
+    // Cleanup streams now that we have the blob
+    cleanup();
+
     return uploadToCloudinary(blob);
-  }, [stopRecording]);
+  }, [getRecordingBlob, cleanup]);
 
   return (
     <RecordingContext.Provider
@@ -245,6 +400,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
         stopRecording,
         stopAndUpload,
         cleanup,
+        getRecordingBlob,
       }}
     >
       {children}

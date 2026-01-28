@@ -6,18 +6,13 @@ import { Link } from "react-router-dom";
 export default function NotFound() {
   return (
     <div className="min-h-screen bg-black flex items-center justify-center relative overflow-hidden px-4">
-      {/* Background glow effects */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-yellow-500/10 rounded-full blur-[150px]" />
       <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-amber-500/10 rounded-full blur-[120px]" />
 
-      {/* Content */}
       <div className="relative z-10 text-center">
-        {/* 404 Number */}
         <h1 className="text-[150px] sm:text-[200px] md:text-[250px] font-bold text-white/5 leading-none select-none">
           404
         </h1>
-
-        {/* Overlay Text */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-yellow-400 text-lg sm:text-xl font-medium uppercase tracking-widest mb-2">
             Page Not Found

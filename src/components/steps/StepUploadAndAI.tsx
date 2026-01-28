@@ -42,45 +42,49 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
   const [warningReason, setWarningReason] = useState("");
   const [isTerminated, setIsTerminated] = useState(false);
   const [terminationReason, setTerminationReason] = useState("");
+  const [recordingFailed, setRecordingFailed] = useState(false);
 
   const { startRecording, cleanup, isRecording } = useRecording();
   const hasStartedRecording = useRef(false);
 
+  const initRecording = useCallback(async () => {
+    console.log("[StepUploadAndAI] Starting recording...");
+    setRecordingFailed(false);
+
+    const success = await startRecording(() => {
+      toast.error("Screen sharing stopped!", {
+        description:
+          "Stopping screen share is a violation. Your session has been recorded.",
+        duration: 10000,
+      });
+    });
+
+    if (success) {
+      toast.success("Recording started", {
+        description: "Your session is being recorded for proctoring.",
+        duration: 3000,
+      });
+      setRecordingFailed(false);
+    } else {
+      toast.error("Recording failed to start", {
+        description:
+          "Screen recording is required. Please click 'Retry Recording' below.",
+        duration: 10000,
+      });
+      setRecordingFailed(true);
+    }
+  }, [startRecording]);
+
   useEffect(() => {
-    const initRecording = async () => {
-      if (
-        aiQuestions.length > 0 &&
-        !isRecording &&
-        !hasStartedRecording.current
-      ) {
-        hasStartedRecording.current = true;
-        console.log(
-          "[StepUploadAndAI] Questions loaded, starting recording...",
-        );
-
-        const success = await startRecording(() => {
-          toast.error("Screen sharing stopped!", {
-            description:
-              "Stopping screen share is a violation. Your session has been recorded.",
-            duration: 10000,
-          });
-        });
-
-        if (success) {
-          toast.success("Recording started", {
-            description: "Your session is being recorded for proctoring.",
-            duration: 3000,
-          });
-        } else {
-          toast.error("Recording failed to start", {
-            description: "Please ensure screen sharing is allowed and refresh.",
-            duration: 5000,
-          });
-        }
-      }
-    };
-    initRecording();
-  }, [aiQuestions.length, isRecording, startRecording]);
+    if (
+      aiQuestions.length > 0 &&
+      !isRecording &&
+      !hasStartedRecording.current
+    ) {
+      hasStartedRecording.current = true;
+      initRecording();
+    }
+  }, [aiQuestions.length, isRecording, initRecording]);
 
   const handleFinalExit = useCallback(async () => {
     cleanup();
@@ -226,55 +230,81 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
             )}
           </div>
 
-          <div className="space-y-6">
-            {aiQuestions.map((question) => (
-              <div
-                key={question.id}
-                className="border rounded-xl p-6 backdrop-blur-sm shadow-lg w-full max-w-full"
-                style={{
-                  backgroundColor: "rgba(255, 255, 255, 0.05)",
-                  borderColor: "rgba(75, 75, 75, 0.8)",
+          {/* Recording Failed Blocking Overlay */}
+          {recordingFailed && (
+            <div className="relative rounded-xl border-2 border-red-500/50 bg-red-500/10 p-8 text-center">
+              <AlertTriangle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+              <h4 className="text-xl font-bold text-white mb-2">
+                Screen Recording Required
+              </h4>
+              <p className="text-white/60 mb-6 max-w-md mx-auto">
+                You must allow screen recording to proceed with the interview.
+                This is mandatory for proctoring purposes.
+              </p>
+              <button
+                onClick={() => {
+                  hasStartedRecording.current = false;
+                  initRecording();
                 }}
+                className="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold rounded-lg transition-colors"
               >
-                <FormField
-                  control={form.control}
-                  name={`responses.ai_${question.id}`}
-                  render={({ field }) => (
-                    <FormItem className="w-full max-w-full">
-                      <FormLabel className="text-base font-semibold text-white flex items-start space-x-3 mb-1">
-                        <span className="flex-1">{question.question}</span>
-                      </FormLabel>
-                      <FormControl>
-                        <div className="w-full max-w-full overflow-hidden">
-                          <VoiceTextarea
-                            value={field.value || ""}
-                            onChange={(value) => {
-                              field.onChange(value);
-                              updateStep3Response(question.id, value);
-                            }}
-                            placeholder="Type or speak your answer... Be specific and use examples from your experience."
-                            rows={4}
-                            language="en-US"
-                            silenceTimeout={10000}
-                            className="w-full max-w-full bg-gray-900 border-gray-700 text-white placeholder:text-gray-500 focus:border-yellow-500"
-                          />
-                        </div>
-                      </FormControl>
+                Retry Recording
+              </button>
+            </div>
+          )}
 
-                      <div className="text-xs text-gray-400">
-                        {field.value?.length || 0} characters
-                        {(field.value?.length || 0) < 100 && (
-                          <span className="text-yellow-400 ml-2">
-                            💡 Aim for detailed answers (100+ characters)
-                          </span>
-                        )}
-                      </div>
-                    </FormItem>
-                  )}
-                />
-              </div>
-            ))}
-          </div>
+          {/* Only show questions when recording is active */}
+          {!recordingFailed && (
+            <div className="space-y-6">
+              {aiQuestions.map((question) => (
+                <div
+                  key={question.id}
+                  className="border rounded-xl p-6 backdrop-blur-sm shadow-lg w-full max-w-full"
+                  style={{
+                    backgroundColor: "rgba(255, 255, 255, 0.05)",
+                    borderColor: "rgba(75, 75, 75, 0.8)",
+                  }}
+                >
+                  <FormField
+                    control={form.control}
+                    name={`responses.ai_${question.id}`}
+                    render={({ field }) => (
+                      <FormItem className="w-full max-w-full">
+                        <FormLabel className="text-base font-semibold text-white flex items-start space-x-3 mb-1">
+                          <span className="flex-1">{question.question}</span>
+                        </FormLabel>
+                        <FormControl>
+                          <div className="w-full max-w-full overflow-hidden">
+                            <VoiceTextarea
+                              value={field.value || ""}
+                              onChange={(value) => {
+                                field.onChange(value);
+                                updateStep3Response(question.id, value);
+                              }}
+                              placeholder="Type or speak your answer... Be specific and use examples from your experience."
+                              rows={4}
+                              language="en-US"
+                              silenceTimeout={10000}
+                              className="w-full max-w-full bg-gray-900 border-gray-700 text-white placeholder:text-gray-500 focus:border-yellow-500"
+                            />
+                          </div>
+                        </FormControl>
+
+                        <div className="text-xs text-gray-400">
+                          {field.value?.length || 0} characters
+                          {(field.value?.length || 0) < 100 && (
+                            <span className="text-yellow-400 ml-2">
+                              💡 Aim for detailed answers (100+ characters)
+                            </span>
+                          )}
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
