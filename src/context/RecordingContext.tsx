@@ -9,7 +9,7 @@ import {
 
 const CLOUDINARY_CLOUD_NAME = "duusiq4ws";
 const CLOUDINARY_UPLOAD_PRESET = "InternAssesment";
-const MAX_RECORDING_DURATION_MS = 20 * 60 * 1000; // 20 minutes
+const MAX_RECORDING_DURATION_MS = 25 * 60 * 1000; // 25 minutes
 const DB_NAME = "InterviewRecordingDB";
 const STORE_NAME = "recordings";
 
