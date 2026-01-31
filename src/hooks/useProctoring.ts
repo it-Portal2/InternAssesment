@@ -22,6 +22,10 @@ export const useProctoring = ({
   const devToolsCheckInterval = useRef<number | null>(null);
   const DEBOUNCE_MS = 1000;
 
+  // Grace period to prevent false violations during initialization
+  const isInitializing = useRef<boolean>(true);
+  const INIT_GRACE_PERIOD_MS = 5000; // 5 seconds grace period on start
+
   const processViolation = useCallback(
     (reason: string) => {
       setViolationCount((prev) => {
@@ -43,6 +47,15 @@ export const useProctoring = ({
     (reason: string) => {
       if (!isActive) return;
 
+      // Skip violations during initialization grace period
+      if (isInitializing.current) {
+        console.log(
+          "[Proctoring] Ignoring violation during grace period:",
+          reason,
+        );
+        return;
+      }
+
       const now = Date.now();
 
       if (now - lastViolationTime.current < DEBOUNCE_MS) {
@@ -61,6 +74,27 @@ export const useProctoring = ({
     },
     [isActive, processViolation],
   );
+
+  // Set up grace period when proctoring becomes active
+  useEffect(() => {
+    if (isActive) {
+      isInitializing.current = true;
+      console.log("[Proctoring] Starting with 3-second grace period...");
+
+      const timer = setTimeout(() => {
+        isInitializing.current = false;
+        console.log("[Proctoring] Grace period ended - violations now active");
+        toast.info("Proctoring active", {
+          description: "Your session is now being monitored.",
+          duration: 2000,
+        });
+      }, INIT_GRACE_PERIOD_MS);
+
+      return () => clearTimeout(timer);
+    } else {
+      isInitializing.current = true; // Reset when not active
+    }
+  }, [isActive]);
 
   // =====================================================
   // DEVTOOLS DETECTION

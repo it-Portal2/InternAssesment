@@ -12,6 +12,7 @@ import SuccessScreen from "./SuccessScreen";
 import StepPersonalInfo from "./StepPersonalInfo";
 import StepPredefinedQuestions from "./StepPredefinedQuestions";
 import StepPermissions from "./StepPermissions";
+import StepProctoringRules from "./StepProctoringRules";
 import StepUploadAndAI from "./StepUploadAndAI";
 import StepCommentsAndSubmit from "./StepCommentsAndSubmit";
 import { Stepper } from "../ui/Stepper";
@@ -27,8 +28,9 @@ const steps = [
   { id: 1, title: "Personal Info" },
   { id: 2, title: "Questions" },
   { id: 3, title: "Permissions" },
-  { id: 4, title: "Resume" },
-  { id: 5, title: "Submit" },
+  { id: 4, title: "Rules" },
+  { id: 5, title: "Resume" },
+  { id: 6, title: "Submit" },
 ];
 
 export default function ModalApplicationForm({
@@ -40,10 +42,11 @@ export default function ModalApplicationForm({
     isSubmitted,
     resumeAnalysis,
     aiQuestions,
+    rulesAccepted,
+    isAllPermissionsApproved,
     next,
     prev,
     setIsSubmitted,
-    reset,
   } = useApplicationStore();
 
   const [isNextDisabled, setIsNextDisabled] = useState(true);
@@ -90,13 +93,24 @@ export default function ModalApplicationForm({
         case 4:
           setIsNextDisabled(!validateStep4());
           break;
+        case 5:
+          setIsNextDisabled(!validateStep5());
+          break;
         default:
           setIsNextDisabled(false);
           break;
       }
     };
     checkStepValidation();
-  }, [watchedValues, currentStep, resumeAnalysis, aiQuestions, formErrors]);
+  }, [
+    watchedValues,
+    currentStep,
+    resumeAnalysis,
+    aiQuestions,
+    formErrors,
+    isAllPermissionsApproved,
+    rulesAccepted,
+  ]);
 
   const validateStep1 = () => {
     const { fullName, email, phone } = watchedValues;
@@ -127,11 +141,15 @@ export default function ModalApplicationForm({
   };
 
   const validateStep3 = () => {
-    const { isAllPermissionsApproved } = useApplicationStore.getState();
+    // Uses isAllPermissionsApproved from hook (reactive to changes)
     return isAllPermissionsApproved;
   };
 
   const validateStep4 = () => {
+    return rulesAccepted;
+  };
+
+  const validateStep5 = () => {
     if (!resumeAnalysis) return false;
     if (aiQuestions.length > 0) {
       return aiQuestions.every((q) => {
@@ -187,7 +205,15 @@ export default function ModalApplicationForm({
         if (validateStep4()) {
           isValid = true;
         } else {
-          errorMessage = getStep4ErrorMessage();
+          errorMessage = "Please accept the proctoring rules";
+        }
+        break;
+      }
+      case 5: {
+        if (validateStep5()) {
+          isValid = true;
+        } else {
+          errorMessage = getStep5ErrorMessage();
         }
         break;
       }
@@ -231,7 +257,7 @@ export default function ModalApplicationForm({
     return "Please fill in all required fields";
   };
 
-  const getStep4ErrorMessage = () => {
+  const getStep5ErrorMessage = () => {
     if (!resumeAnalysis) return "Please upload and analyze your resume first";
     if (aiQuestions.length > 0) {
       const unansweredQuestions = aiQuestions.filter((q) => {
@@ -269,17 +295,15 @@ export default function ModalApplicationForm({
       document.exitFullscreen().catch(console.error);
     }
 
-    // If form was submitted, reset everything
+    // If form was submitted, reload the page to ensure fresh state
     if (isSubmitted) {
-      // Reset store state
-      reset();
-
       // Clear localStorage
       localStorage.removeItem("uploadedFileInfo");
       localStorage.removeItem("application-store");
 
-      // Reset form
-      form.reset();
+      // Reload page to clear all streams and state completely
+      window.location.reload();
+      return;
     }
 
     onOpenChange(false);
@@ -299,7 +323,8 @@ export default function ModalApplicationForm({
     if (currentStep > 2) completed.push(2);
     if (currentStep > 3) completed.push(3);
     if (currentStep > 4) completed.push(4);
-    if (isSubmitted) completed.push(5);
+    if (currentStep > 5) completed.push(5);
+    if (isSubmitted) completed.push(6);
     return completed;
   };
 
@@ -313,8 +338,10 @@ export default function ModalApplicationForm({
       case 3:
         return <StepPermissions onAllPermissionsGranted={() => next()} />;
       case 4:
-        return <StepUploadAndAI form={form} />;
+        return <StepProctoringRules />;
       case 5:
+        return <StepUploadAndAI form={form} />;
+      case 6:
         return (
           <StepCommentsAndSubmit
             form={form}
@@ -409,7 +436,7 @@ export default function ModalApplicationForm({
                   <span>Back</span>
                 </Button>
 
-                {currentStep < 5 && (
+                {currentStep < 6 && (
                   <Button
                     type="button"
                     onClick={handleNext}

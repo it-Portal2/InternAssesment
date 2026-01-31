@@ -30,6 +30,7 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
     aiQuestions,
     isProcessingResume,
     resumeAnalysis,
+    rulesAccepted,
     setUploadedFile,
     setResumeAnalysis,
     setAiQuestions,
@@ -43,20 +44,41 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
   const [isTerminated, setIsTerminated] = useState(false);
   const [terminationReason, setTerminationReason] = useState("");
   const [recordingFailed, setRecordingFailed] = useState(false);
+  const [screenShareStopped, setScreenShareStopped] = useState(false);
 
   const { startRecording, cleanup, isRecording } = useRecording();
   const hasStartedRecording = useRef(false);
 
+  // Use ref to always access latest cleanup function (prevents stale closure)
+  const cleanupRef = useRef(cleanup);
+  cleanupRef.current = cleanup;
+
+  // Handle screen share being stopped - IMMEDIATE TERMINATION
+  const handleScreenShareStopped = useCallback(() => {
+    console.log("[StepUploadAndAI] Screen share stopped - TERMINATING EXAM");
+    setScreenShareStopped(true);
+    cleanupRef.current(); // Use ref to get latest cleanup
+
+    // Clear all local storage to force restart
+    localStorage.removeItem("application-store");
+    localStorage.removeItem("pendingRecordingUrl");
+    localStorage.removeItem("uploadedFileInfo");
+
+    toast.error("Exam Terminated!", {
+      description:
+        "You stopped screen sharing. This is a critical violation. The exam has been terminated.",
+      duration: 15000,
+    });
+  }, []); // No dependencies needed - uses ref
+
   const initRecording = useCallback(async () => {
     console.log("[StepUploadAndAI] Starting recording...");
     setRecordingFailed(false);
+    setScreenShareStopped(false);
 
     const success = await startRecording(() => {
-      toast.error("Screen sharing stopped!", {
-        description:
-          "Stopping screen share is a violation. Your session has been recorded.",
-        duration: 10000,
-      });
+      // CRITICAL: Screen share stopped = IMMEDIATE TERMINATION
+      handleScreenShareStopped();
     });
 
     if (success) {
@@ -73,18 +95,21 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
       });
       setRecordingFailed(true);
     }
-  }, [startRecording]);
+  }, [startRecording, handleScreenShareStopped]);
 
+  // Start recording ONLY after resume is analyzed and AI questions are ready
+  // This ensures screen share/recording only starts for the actual interview
+  // Added delay to ensure UI has fully rendered before screen share picker appears
   useEffect(() => {
-    if (
-      aiQuestions.length > 0 &&
-      !isRecording &&
-      !hasStartedRecording.current
-    ) {
+    if (aiQuestions.length > 0 && !hasStartedRecording.current) {
       hasStartedRecording.current = true;
-      initRecording();
+      // Delay to ensure questions are visible before screen share prompt
+      const timer = setTimeout(() => {
+        initRecording();
+      }, 500);
+      return () => clearTimeout(timer);
     }
-  }, [aiQuestions.length, isRecording, initRecording]);
+  }, [aiQuestions.length, initRecording]);
 
   const handleFinalExit = useCallback(async () => {
     cleanup();
@@ -160,8 +185,25 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
 
   return (
     <div className="space-y-8">
+      {/* Proctoring Monitor - Key prevents remount on question changes */}
       {aiQuestions.length > 0 && (
-        <ProctoringMonitor violationCount={violationCount} maxViolations={3} />
+        <ProctoringMonitor
+          key="proctoring-monitor"
+          violationCount={violationCount}
+          maxViolations={3}
+          isActive={
+            aiQuestions.length > 0 &&
+            rulesAccepted &&
+            !isTerminated &&
+            !screenShareStopped
+          }
+          onCameraViolation={(reason) => {
+            handleWarning(reason, violationCount + 1);
+          }}
+          onAudioViolation={(reason) => {
+            handleWarning(reason, violationCount + 1);
+          }}
+        />
       )}
 
       <ScreenCheckModal
@@ -170,13 +212,22 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
       />
 
       <WarningModal
-        open={warningModalOpen && !isTerminated}
+        open={warningModalOpen && !isTerminated && !screenShareStopped}
         onClose={() => setWarningModalOpen(false)}
         reason={warningReason}
       />
 
+      {/* Screen Share Stopped - IMMEDIATE TERMINATION */}
       <WarningModal
-        open={isTerminated}
+        open={screenShareStopped}
+        onClose={handleFinalExit}
+        reason="You stopped screen sharing. This is a critical violation that cannot be recovered."
+        isTermination={true}
+      />
+
+      {/* Regular Termination (3 violations) */}
+      <WarningModal
+        open={isTerminated && !screenShareStopped}
         onClose={handleFinalExit}
         reason={terminationReason}
         isTermination={true}

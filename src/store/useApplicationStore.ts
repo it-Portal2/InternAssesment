@@ -7,7 +7,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 interface ApplicationState {
-  currentStep: 1 | 2 | 3 | 4 | 5;
+  currentStep: 1 | 2 | 3 | 4 | 5 | 6;
   uploadedFile: File | null;
   extractedFileData: {
     fileName: string;
@@ -21,6 +21,7 @@ interface ApplicationState {
   isSubmitted: boolean;
   isCameraApproved: boolean; // Persists camera permission state
   isAllPermissionsApproved: boolean; // All 3 permissions (camera, audio, screen)
+  rulesAccepted: boolean; // Proctoring rules accepted
 
   applicationData: {
     fullName: string;
@@ -36,9 +37,10 @@ interface ApplicationState {
   };
 
   // Actions
-  setStep: (step: 1 | 2 | 3 | 4) => void;
+  setStep: (step: 1 | 2 | 3 | 4 | 5 | 6) => void;
   next: () => void;
   prev: () => void;
+  setRulesAccepted: (accepted: boolean) => void;
   setUploadedFile: (file: File | null) => void;
   setExtractedFileData: (
     data: {
@@ -87,6 +89,7 @@ export const useApplicationStore = create<ApplicationState>()(
       isSubmitted: false,
       isCameraApproved: false,
       isAllPermissionsApproved: false,
+      rulesAccepted: false,
       applicationData: {
         fullName: "",
         email: "",
@@ -104,17 +107,19 @@ export const useApplicationStore = create<ApplicationState>()(
 
       next: () => {
         const currentStep = get().currentStep;
-        if (currentStep < 5) {
-          set({ currentStep: (currentStep + 1) as 1 | 2 | 3 | 4 | 5 });
+        if (currentStep < 6) {
+          set({ currentStep: (currentStep + 1) as 1 | 2 | 3 | 4 | 5 | 6 });
         }
       },
 
       prev: () => {
         const currentStep = get().currentStep;
         if (currentStep > 1) {
-          set({ currentStep: (currentStep - 1) as 1 | 2 | 3 | 4 | 5 });
+          set({ currentStep: (currentStep - 1) as 1 | 2 | 3 | 4 | 5 | 6 });
         }
       },
+
+      setRulesAccepted: (accepted) => set({ rulesAccepted: accepted }),
 
       setUploadedFile: (file) => {
         // Only store file if it's not null or if we have successful analysis
@@ -235,6 +240,7 @@ export const useApplicationStore = create<ApplicationState>()(
           isSubmitted: false,
           isCameraApproved: false,
           isAllPermissionsApproved: false,
+          rulesAccepted: false,
           applicationData: {
             fullName: "",
             email: "",
@@ -255,6 +261,8 @@ export const useApplicationStore = create<ApplicationState>()(
         ...state,
         // Don't persist the actual File object, just store successful states
         uploadedFile: state.resumeAnalysis ? true : null, // Store boolean flag instead of file
+        // Don't persist rulesAccepted - user must re-accept after refresh for security
+        rulesAccepted: false,
       }),
       onRehydrateStorage: () => (state, error) => {
         if (!error && state) {
