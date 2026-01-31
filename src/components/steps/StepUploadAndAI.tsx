@@ -101,6 +101,12 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
   // This ensures screen share/recording only starts for the actual interview
   // Added delay to ensure UI has fully rendered before screen share picker appears
   useEffect(() => {
+    // If already recording, don't restart logic
+    if (isRecording) {
+      hasStartedRecording.current = true;
+      return;
+    }
+
     if (aiQuestions.length > 0 && !hasStartedRecording.current) {
       hasStartedRecording.current = true;
       // Delay to ensure questions are visible before screen share prompt

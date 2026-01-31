@@ -191,6 +191,12 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
 
   const startRecording = useCallback(
     async (onScreenShareStop?: () => void): Promise<boolean> => {
+      // Prevent multiple starts
+      if (isActuallyRecordingRef.current) {
+        console.log("[Recording] Alredy recording, ignoring start request");
+        return true;
+      }
+
       console.log("[Recording] Starting recording...");
       setError(null);
       chunksRef.current = [];
