@@ -19,6 +19,10 @@ interface ApplicationState {
   aiQuestions: AIQuestion[];
   isProcessingResume: boolean;
   isSubmitted: boolean;
+  // Proctoring state - persisted globally
+  isTerminated: boolean;
+  terminationReason: string | null;
+  violationCount: number;
   isCameraApproved: boolean; // Persists camera permission state
   isAllPermissionsApproved: boolean; // All 3 permissions (camera, audio, screen)
   rulesAccepted: boolean; // Proctoring rules accepted
@@ -41,6 +45,10 @@ interface ApplicationState {
   next: () => void;
   prev: () => void;
   setRulesAccepted: (accepted: boolean) => void;
+  // Proctoring actions
+  setIsTerminated: (terminated: boolean, reason?: string) => void;
+  incrementViolation: () => number;
+  resetViolations: () => void;
   setUploadedFile: (file: File | null) => void;
   setExtractedFileData: (
     data: {
@@ -87,6 +95,9 @@ export const useApplicationStore = create<ApplicationState>()(
       aiQuestions: [],
       isProcessingResume: false,
       isSubmitted: false,
+      isTerminated: false,
+      terminationReason: null,
+      violationCount: 0,
       isCameraApproved: false,
       isAllPermissionsApproved: false,
       rulesAccepted: false,
@@ -120,6 +131,25 @@ export const useApplicationStore = create<ApplicationState>()(
       },
 
       setRulesAccepted: (accepted) => set({ rulesAccepted: accepted }),
+
+      setIsTerminated: (terminated, reason) =>
+        set({
+          isTerminated: terminated,
+          terminationReason: reason || null,
+        }),
+
+      incrementViolation: () => {
+        const newCount = get().violationCount + 1;
+        set({ violationCount: newCount });
+        return newCount;
+      },
+
+      resetViolations: () =>
+        set({
+          violationCount: 0,
+          isTerminated: false,
+          terminationReason: null,
+        }),
 
       setUploadedFile: (file) => {
         // Only store file if it's not null or if we have successful analysis

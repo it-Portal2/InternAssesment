@@ -14,9 +14,8 @@ import type { InsertApplicationForm } from "@/lib/validation";
 import { VoiceTextarea } from "@/components/ui/VoiceTextarea";
 import type { AnalysisResult } from "@/types/application";
 import ProctoringMonitor from "../ProctoringMonitor";
-import { ScreenCheckModal } from "@/components/ScreenCheckModal";
 import WarningModal from "../WarningModal";
-import { useProctoring } from "@/hooks/useProctoring";
+import { useGlobalProctoring } from "@/context/ProctoringContext";
 import { useRecording } from "@/context/RecordingContext";
 import { useCallback, useState, useEffect, useRef } from "react";
 
@@ -31,6 +30,7 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
     isProcessingResume,
     resumeAnalysis,
     rulesAccepted,
+    isTerminated,
     setUploadedFile,
     setResumeAnalysis,
     setAiQuestions,
@@ -39,10 +39,9 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
     reset,
   } = useApplicationStore();
 
-  const [warningModalOpen, setWarningModalOpen] = useState(false);
-  const [warningReason, setWarningReason] = useState("");
-  const [isTerminated, setIsTerminated] = useState(false);
-  const [terminationReason, setTerminationReason] = useState("");
+  // Use GLOBAL proctoring context instead of local hook
+  const { violationCount } = useGlobalProctoring();
+
   const [recordingFailed, setRecordingFailed] = useState(false);
   const [screenShareStopped, setScreenShareStopped] = useState(false);
 
@@ -121,30 +120,31 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
     cleanup();
     reset();
     form.reset();
+    localStorage.removeItem("application-store");
+    localStorage.removeItem("uploadedFileInfo");
     window.location.reload();
   }, [reset, form, cleanup]);
 
-  const handleWarning = useCallback((reason: string, _count: number) => {
-    setWarningReason(reason);
-    setWarningModalOpen(true);
-  }, []);
+  // Camera/Audio violations are handled by ProctoringMonitor
+  // These feed into global proctoring context via incrementViolation
+  const { incrementViolation } = useApplicationStore();
 
-  const handleTerminate = useCallback(
-    async (reason: string) => {
-      cleanup();
-      setTerminationReason(reason);
-      setIsTerminated(true);
+  const handleCameraViolation = useCallback(
+    (_reason: string) => {
+      incrementViolation();
     },
-    [cleanup],
+    [incrementViolation],
   );
 
-  const { violationCount, hasMultipleScreens, checkScreenCount } =
-    useProctoring({
-      isActive: aiQuestions.length > 0,
-      onWarning: handleWarning,
-      onTerminate: handleTerminate,
-      maxViolations: 3,
-    });
+  const handleAudioViolation = useCallback(
+    (_reason: string) => {
+      incrementViolation();
+    },
+    [incrementViolation],
+  );
+
+  // Note: useProctoring is now called at App level via ProctoringProvider
+  // This component just needs violationCount for display purposes
 
   const handleFileSelect = (file: File | null) => {
     if (file) {
@@ -191,7 +191,7 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
 
   return (
     <div className="space-y-8">
-      {/* Proctoring Monitor - Key prevents remount on question changes */}
+      {/* Proctoring Monitor - Camera/Audio monitoring (only in Step 5) */}
       {aiQuestions.length > 0 && (
         <ProctoringMonitor
           key="proctoring-monitor"
@@ -203,39 +203,16 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
             !isTerminated &&
             !screenShareStopped
           }
-          onCameraViolation={(reason) => {
-            handleWarning(reason, violationCount + 1);
-          }}
-          onAudioViolation={(reason) => {
-            handleWarning(reason, violationCount + 1);
-          }}
+          onCameraViolation={handleCameraViolation}
+          onAudioViolation={handleAudioViolation}
         />
       )}
 
-      <ScreenCheckModal
-        isOpen={hasMultipleScreens}
-        onCheckAgain={checkScreenCount}
-      />
-
-      <WarningModal
-        open={warningModalOpen && !isTerminated && !screenShareStopped}
-        onClose={() => setWarningModalOpen(false)}
-        reason={warningReason}
-      />
-
-      {/* Screen Share Stopped - IMMEDIATE TERMINATION */}
+      {/* Screen Share Stopped - LOCAL handling (specific to this step) */}
       <WarningModal
         open={screenShareStopped}
         onClose={handleFinalExit}
         reason="You stopped screen sharing. This is a critical violation that cannot be recovered."
-        isTermination={true}
-      />
-
-      {/* Regular Termination (3 violations) */}
-      <WarningModal
-        open={isTerminated && !screenShareStopped}
-        onClose={handleFinalExit}
-        reason={terminationReason}
         isTermination={true}
       />
 

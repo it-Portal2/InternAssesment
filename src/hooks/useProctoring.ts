@@ -26,19 +26,23 @@ export const useProctoring = ({
   const isInitializing = useRef<boolean>(true);
   const INIT_GRACE_PERIOD_MS = 5000; // 5 seconds grace period on start
 
+  // Reference to track the current violation count for calculations
+  // This avoids calling side effects inside setState
+  const violationCountRef = useRef(0);
+
   const processViolation = useCallback(
     (reason: string) => {
-      setViolationCount((prev) => {
-        const newCount = prev + 1;
+      // Calculate new count from ref (not inside setter to avoid StrictMode double-invoke)
+      const newCount = violationCountRef.current + 1;
+      violationCountRef.current = newCount;
+      setViolationCount(newCount);
 
-        if (newCount >= maxViolations) {
-          onTerminate(reason);
-        } else {
-          onWarning(reason, newCount);
-        }
-
-        return newCount;
-      });
+      // Call callbacks OUTSIDE state setter to prevent double-invocation in StrictMode
+      if (newCount >= maxViolations) {
+        onTerminate(reason);
+      } else {
+        onWarning(reason, newCount);
+      }
     },
     [maxViolations, onWarning, onTerminate],
   );
