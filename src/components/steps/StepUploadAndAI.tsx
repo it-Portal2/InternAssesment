@@ -31,6 +31,7 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
     resumeAnalysis,
     rulesAccepted,
     isTerminated,
+    setIsTerminated,
     setUploadedFile,
     setResumeAnalysis,
     setAiQuestions,
@@ -58,6 +59,9 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
     setScreenShareStopped(true);
     cleanupRef.current(); // Use ref to get latest cleanup
 
+    // Set terminated in store so global modal shows
+    setIsTerminated(true, "Screen sharing was stopped — exam terminated.");
+
     // Clear all local storage to force restart
     localStorage.removeItem("application-store");
     localStorage.removeItem("pendingRecordingUrl");
@@ -68,7 +72,7 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
         "You stopped screen sharing. This is a critical violation. The exam has been terminated.",
       duration: 15000,
     });
-  }, []); // No dependencies needed - uses ref
+  }, [setIsTerminated]); // setIsTerminated is stable from Zustand
 
   const initRecording = useCallback(async () => {
     console.log("[StepUploadAndAI] Starting recording...");

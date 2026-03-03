@@ -5,17 +5,15 @@ import { checkMultipleScreens } from "@/utils/screenDetection";
 interface UseProctoringProps {
   isActive: boolean;
   onWarning: (reason: string, count: number) => void;
-  onTerminate: (reason: string) => void;
-  maxViolations?: number;
+  maxViolations?: number; // kept for interface compat, unused in hook
+  suppressRef?: React.RefObject<boolean>;
 }
 
 export const useProctoring = ({
   isActive,
   onWarning,
-  onTerminate,
-  maxViolations = 3,
+  suppressRef,
 }: UseProctoringProps) => {
-  const [violationCount, setViolationCount] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const lastViolationTime = useRef<number>(0);
   const pendingViolation = useRef<string | null>(null);
@@ -26,30 +24,24 @@ export const useProctoring = ({
   const isInitializing = useRef<boolean>(true);
   const INIT_GRACE_PERIOD_MS = 5000; // 5 seconds grace period on start
 
-  // Reference to track the current violation count for calculations
-  // This avoids calling side effects inside setState
-  const violationCountRef = useRef(0);
-
+  // processViolation just delegates to the callback.
+  // ProctoringContext handles counting and termination decisions.
   const processViolation = useCallback(
     (reason: string) => {
-      // Calculate new count from ref (not inside setter to avoid StrictMode double-invoke)
-      const newCount = violationCountRef.current + 1;
-      violationCountRef.current = newCount;
-      setViolationCount(newCount);
-
-      // Call callbacks OUTSIDE state setter to prevent double-invocation in StrictMode
-      if (newCount >= maxViolations) {
-        onTerminate(reason);
-      } else {
-        onWarning(reason, newCount);
-      }
+      onWarning(reason, 0); // count param unused — store is source of truth
     },
-    [maxViolations, onWarning, onTerminate],
+    [onWarning],
   );
 
   const incrementViolation = useCallback(
     (reason: string) => {
       if (!isActive) return;
+
+      // Skip if externally suppressed (e.g. during file download dialog)
+      if (suppressRef?.current) {
+        console.log("[Proctoring] Ignoring violation (suppressed):", reason);
+        return;
+      }
 
       // Skip violations during initialization grace period
       if (isInitializing.current) {
@@ -594,7 +586,6 @@ export const useProctoring = ({
   }, [isActive, incrementViolation, isFullscreen]);
 
   return {
-    violationCount,
     isFullscreen,
     enterFullscreen,
     hasMultipleScreens,

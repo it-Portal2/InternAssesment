@@ -3,6 +3,7 @@ import {
   useContext,
   useState,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
 import { useProctoring } from "@/hooks/useProctoring";
@@ -20,6 +21,8 @@ interface ProctoringContextType {
   checkScreenCount: () => Promise<boolean>;
   isTerminated: boolean;
   terminationReason: string | null;
+  suppressProctoring: () => void;
+  resumeProctoring: () => void;
 }
 
 const ProctoringContext = createContext<ProctoringContextType | null>(null);
@@ -41,41 +44,54 @@ export function ProctoringProvider({ children }: { children: ReactNode }) {
   const [warningModalOpen, setWarningModalOpen] = useState(false);
   const [warningReason, setWarningReason] = useState("");
 
+  // Suppression ref - temporarily disables violation detection (e.g. during file download)
+  const suppressRef = useRef(false);
+  const suppressProctoring = useCallback(() => {
+    suppressRef.current = true;
+  }, []);
+  const resumeProctoring = useCallback(() => {
+    // Small delay to let browser regain focus after download dialog
+    setTimeout(() => {
+      suppressRef.current = false;
+    }, 2000);
+  }, []);
+
   // Determine if proctoring should be active GLOBALLY
   // Active when: exam started (aiQuestions exist), rules accepted, not terminated, not submitted
   const isActive =
     aiQuestions.length > 0 && rulesAccepted && !isTerminated && !isSubmitted;
 
+  const maxViolations = 3;
+
   const handleWarning = useCallback(
     (reason: string, _count: number) => {
-      // Increment violation in store (persisted)
+      // Increment violation in store (single source of truth)
       const newCount = incrementViolation();
-      setWarningReason(reason);
-      setWarningModalOpen(true);
 
-      console.log(
-        `[GlobalProctoring] Warning: ${reason} (Violation ${newCount}/3)`,
-      );
+      // Check if we should terminate
+      if (newCount >= maxViolations) {
+        console.log(
+          `[GlobalProctoring] TERMINATING: ${reason} (Violation ${newCount}/${maxViolations})`,
+        );
+        setIsTerminated(true, reason);
+        cleanup();
+        toast.error("Exam Terminated", {
+          description: reason,
+          duration: 10000,
+        });
+      } else {
+        setWarningReason(reason);
+        setWarningModalOpen(true);
+        console.log(
+          `[GlobalProctoring] Warning: ${reason} (Violation ${newCount}/${maxViolations})`,
+        );
+      }
     },
-    [incrementViolation],
+    [incrementViolation, setIsTerminated, cleanup],
   );
 
-  const handleTerminate = useCallback(
-    (reason: string) => {
-      console.log("[GlobalProctoring] TERMINATING EXAM:", reason);
-      setIsTerminated(true, reason);
-      cleanup();
-
-      // Show termination toast
-      toast.error("Exam Terminated", {
-        description: reason,
-        duration: 10000,
-      });
-    },
-    [cleanup, setIsTerminated],
-  );
-
-  const maxViolations = 3;
+  // handleTerminate is no longer called by useProctoring.
+  // Termination is handled inside handleWarning above.
 
   const {
     isFullscreen,
@@ -85,8 +101,7 @@ export function ProctoringProvider({ children }: { children: ReactNode }) {
   } = useProctoring({
     isActive,
     onWarning: handleWarning,
-    onTerminate: handleTerminate,
-    maxViolations,
+    suppressRef,
   });
 
   const handleCloseWarning = () => {
@@ -110,6 +125,8 @@ export function ProctoringProvider({ children }: { children: ReactNode }) {
         checkScreenCount,
         isTerminated,
         terminationReason,
+        suppressProctoring,
+        resumeProctoring,
       }}
     >
       {children}

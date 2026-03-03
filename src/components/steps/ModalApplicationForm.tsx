@@ -281,13 +281,23 @@ export default function ModalApplicationForm({
     };
   }, [open]);
 
+  // Check if exam is actively in progress (should block modal close)
+  const isExamActive = aiQuestions.length > 0 && rulesAccepted && !isSubmitted;
+
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && open) handleClose();
+      if (e.key === "Escape" && open) {
+        // Block closing during active exam
+        if (isExamActive) {
+          e.preventDefault();
+          return;
+        }
+        handleClose();
+      }
     };
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
-  }, [open]);
+  }, [open, isExamActive]);
 
   const handleClose = () => {
     // Exit fullscreen if active
@@ -310,6 +320,8 @@ export default function ModalApplicationForm({
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
+    // Block closing during active exam
+    if (isExamActive) return;
     if (e.target === e.currentTarget) handleClose();
   };
 
@@ -393,14 +405,17 @@ export default function ModalApplicationForm({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleClose}
-          className="absolute right-3 sm:right-4 top-3 sm:top-4 text-gray-400 hover:text-white hover:bg-white/10 border border-white/10 h-8 w-8 z-10"
-        >
-          <X className="h-4 w-4" />
-        </Button>
+        {/* Hide close button during active exam */}
+        {!isExamActive && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleClose}
+            className="absolute right-3 sm:right-4 top-3 sm:top-4 text-gray-400 hover:text-white hover:bg-white/10 border border-white/10 h-8 w-8 z-10"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
 
         <div
           className="flex flex-col overflow-y-auto min-h-0"

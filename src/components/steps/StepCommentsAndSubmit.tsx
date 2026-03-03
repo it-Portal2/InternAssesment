@@ -1,6 +1,6 @@
 import type { UseFormReturn } from "react-hook-form";
-import { useEffect, useState } from "react";
-import { Send, RefreshCw, AlertTriangle } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { Send, RefreshCw, AlertTriangle, Download } from "lucide-react";
 import { toast } from "sonner";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import type { InsertApplicationForm } from "@/lib/validation";
 import { useApplicationStore } from "@/store/useApplicationStore";
 import { useRecording } from "@/context/RecordingContext";
+import { useGlobalProctoring } from "@/context/ProctoringContext";
 import { db } from "@/Firebase";
 
 interface StepCommentsAndSubmitProps {
@@ -36,12 +37,16 @@ export default function StepCommentsAndSubmit({
     uploadProgress,
     isUploading,
     retryUpload,
+    downloadRecordingLocally,
     error: recordingError,
     recordingUrl: existingRecordingUrl,
   } = useRecording();
+  const { suppressProctoring, resumeProctoring } = useGlobalProctoring();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadFailed, setUploadFailed] = useState(false);
+  const [uploadRetryCount, setUploadRetryCount] = useState(0);
+  const [submittedWithoutVideo, setSubmittedWithoutVideo] = useState(false);
   const [firestoreFailed, setFirestoreFailed] = useState(false);
   const [firestoreRetryCount, setFirestoreRetryCount] = useState(0);
   const [pendingData, setPendingData] = useState<InsertApplicationForm | null>(
@@ -89,6 +94,7 @@ export default function StepCommentsAndSubmit({
             duration: 10000,
           });
           setUploadFailed(true);
+          setUploadRetryCount(1); // Initial upload counts as attempt 1
           setIsSubmitting(false);
           return;
         }
@@ -122,15 +128,33 @@ export default function StepCommentsAndSubmit({
       return;
     }
 
+    const newRetryCount = uploadRetryCount + 1;
+    setUploadRetryCount(newRetryCount);
+
+    // After 3 retries, offer fallback
+    if (newRetryCount >= 3) {
+      toast.warning("Upload failed after 3 attempts", {
+        description: "You can now download the video and submit without it.",
+        duration: 8000,
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
     setIsSubmitting(true);
     setUploadFailed(false);
-    toast.info("Retrying upload...", { duration: 5000 });
+    toast.info(`Retrying upload... (attempt ${newRetryCount}/3)`, {
+      duration: 5000,
+    });
 
     const recordingUrl = await retryUpload();
 
     if (!recordingUrl) {
-      toast.error("Retry failed", {
-        description: "Please check your internet connection and try again.",
+      toast.error(`Retry ${newRetryCount}/3 failed`, {
+        description:
+          newRetryCount >= 2
+            ? "One more retry before fallback option becomes available."
+            : "Please check your internet connection and try again.",
         duration: 8000,
       });
       setUploadFailed(true);
@@ -144,6 +168,52 @@ export default function StepCommentsAndSubmit({
 
     await submitToFirestore(pendingData, recordingUrl);
   };
+
+  // Fallback: download video locally + submit answers without video
+  const handleSubmitWithoutVideo = useCallback(async () => {
+    if (!pendingData) {
+      toast.error("No pending data", {
+        description: "Please fill out the form again.",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    // Suppress proctoring during download (file save dialog triggers window.blur)
+    suppressProctoring();
+
+    // Step 1: Download video to user's device
+    toast.info("Downloading your recording to your device...", {
+      duration: 5000,
+    });
+
+    const downloaded = await downloadRecordingLocally();
+
+    // Resume proctoring after download (with delay for dialog dismissal)
+    resumeProctoring();
+    if (!downloaded) {
+      toast.warning("Could not download video", {
+        description:
+          "No recording found, but your answers will still be submitted.",
+        duration: 6000,
+      });
+    } else {
+      toast.success("Video downloaded successfully!", {
+        description: "Check your Downloads folder.",
+        duration: 5000,
+      });
+    }
+
+    // Step 2: Submit answers without video
+    await submitToFirestore(pendingData, "UPLOAD_FAILED");
+    setSubmittedWithoutVideo(true);
+  }, [
+    pendingData,
+    downloadRecordingLocally,
+    suppressProctoring,
+    resumeProctoring,
+  ]);
 
   const handleRetryFirestore = async () => {
     if (!pendingData || !savedRecordingUrl) {
@@ -225,6 +295,9 @@ export default function StepCommentsAndSubmit({
         // Clear saved recording URL from localStorage
         localStorage.removeItem("pendingRecordingUrl");
         setSavedRecordingUrl(null);
+
+        // Mark as submitted in store FIRST (deactivates proctoring immediately)
+        useApplicationStore.getState().setIsSubmitted(true);
 
         // Cleanup and reset
         cleanup();
@@ -356,10 +429,11 @@ export default function StepCommentsAndSubmit({
       )}
 
       {/* Upload Error & Retry */}
-      {uploadFailed && !isUploading && (
+      {uploadFailed && !isUploading && uploadRetryCount < 3 && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 space-y-3">
           <p className="text-red-400 text-sm">
-            {recordingError || "Recording upload failed. Please try again."}
+            Recording upload failed (attempt {uploadRetryCount}/3). Please try
+            again.
           </p>
           <Button
             type="button"
@@ -368,8 +442,94 @@ export default function StepCommentsAndSubmit({
             className="bg-red-500 hover:bg-red-600 text-white"
           >
             <RefreshCw className="h-4 w-4 mr-2" />
-            Retry Upload
+            Retry Upload ({uploadRetryCount}/3)
           </Button>
+        </div>
+      )}
+
+      {/* After 3 retry failures: Fallback option */}
+      {uploadRetryCount >= 3 && !submittedWithoutVideo && (
+        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-5 space-y-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-6 w-6 text-yellow-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-yellow-400 font-semibold text-base">
+                Video Upload Failed After 3 Attempts
+              </p>
+              <p className="text-white/60 text-sm mt-2">
+                Due to technical difficulties, we couldn't upload your interview
+                recording. You can still submit your answers — your video will
+                be downloaded to your device.
+              </p>
+              <p className="text-white/50 text-xs mt-2">
+                After submitting, you{" "}
+                <strong className="text-yellow-400">must</strong> send the
+                downloaded video to{" "}
+                <strong className="text-yellow-400">
+                  internship@cehpoint.co.in
+                </strong>{" "}
+                or WhatsApp at{" "}
+                <strong className="text-yellow-400">+91 90911 56095</strong>{" "}
+                with your full name, email, date & time of interview, and the
+                issue you faced. Without the video, your application will not be
+                considered.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            onClick={handleSubmitWithoutVideo}
+            disabled={isSubmitting}
+            className="w-full bg-yellow-600 hover:bg-yellow-700 text-black font-semibold"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            {isSubmitting
+              ? "Downloading & Submitting..."
+              : "Download Video & Submit Without Upload"}
+          </Button>
+        </div>
+      )}
+
+      {/* Post-submission message when video was not uploaded */}
+      {submittedWithoutVideo && (
+        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-5 space-y-3">
+          <p className="text-green-400 font-semibold">
+            ✅ Your answers have been submitted successfully!
+          </p>
+          <div className="text-white/70 text-sm space-y-2">
+            <p>
+              However, your interview video could not be uploaded. It has been
+              <strong className="text-green-400">
+                {" "}
+                downloaded to your device
+              </strong>
+              .
+            </p>
+            <div className="bg-white/5 border border-white/10 rounded-lg p-3 mt-3">
+              <p className="text-yellow-400 font-medium text-sm mb-2">
+                ⚠️ Action Required: Send your video
+              </p>
+              <p className="text-white/60 text-xs">
+                Please send the downloaded interview recording to{" "}
+                <strong className="text-yellow-400">
+                  internship@cehpoint.co.in
+                </strong>{" "}
+                or WhatsApp at{" "}
+                <strong className="text-yellow-400">+91 90911 56095</strong>{" "}
+                with the following details:
+              </p>
+              <ul className="text-white/50 text-xs mt-2 space-y-1 list-disc list-inside">
+                <li>Your full name</li>
+                <li>Email address used in the application</li>
+                <li>Date & time of interview</li>
+                <li>Brief description of the issue you faced</li>
+              </ul>
+              <p className="text-red-400/80 text-xs mt-2 font-medium">
+                If you do not send the video, your application will not be
+                considered.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -402,31 +562,34 @@ export default function StepCommentsAndSubmit({
         </div>
       )}
 
-      <div className="pt-6 border-t border-white/10">
-        <Button
-          type="button"
-          onClick={form.handleSubmit(handleSubmit)}
-          disabled={isSubmitting || isSubmitDisabled() || isUploading}
-          className="w-full h-12 text-lg font-semibold bg-yellow-500 hover:bg-yellow-600 text-black disabled:bg-gray-700 disabled:text-gray-500 shadow-lg shadow-yellow-500/20"
-          size="lg"
-        >
-          {isSubmitting || isUploading ? (
-            <div className="flex items-center space-x-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-2 border-black border-t-transparent" />
-              <span>
-                {isUploading
-                  ? `Uploading... ${uploadProgress}%`
-                  : "Submitting..."}
-              </span>
-            </div>
-          ) : (
-            <div className="flex items-center space-x-2">
-              <Send className="h-5 w-5" />
-              <span>Submit Application</span>
-            </div>
-          )}
-        </Button>
-      </div>
+      {/* Only show main Submit button when upload hasn't failed */}
+      {!uploadFailed && !submittedWithoutVideo && uploadRetryCount < 3 && (
+        <div className="pt-6 border-t border-white/10">
+          <Button
+            type="button"
+            onClick={form.handleSubmit(handleSubmit)}
+            disabled={isSubmitting || isSubmitDisabled() || isUploading}
+            className="w-full h-12 text-lg font-semibold bg-yellow-500 hover:bg-yellow-600 text-black disabled:bg-gray-700 disabled:text-gray-500 shadow-lg shadow-yellow-500/20"
+            size="lg"
+          >
+            {isSubmitting || isUploading ? (
+              <div className="flex items-center space-x-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-black border-t-transparent" />
+                <span>
+                  {isUploading
+                    ? `Uploading... ${uploadProgress}%`
+                    : "Submitting..."}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <Send className="h-5 w-5" />
+                <span>Submit Application</span>
+              </div>
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

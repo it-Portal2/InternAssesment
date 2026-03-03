@@ -28,6 +28,7 @@ interface RecordingContextType {
   cleanup: () => void;
   getRecordingBlob: () => Promise<Blob | null>;
   retryUpload: () => Promise<string | null>; // New: retry failed upload
+  downloadRecordingLocally: () => Promise<boolean>; // Download video to user's device
 }
 
 const RecordingContext = createContext<RecordingContextType | null>(null);
@@ -563,6 +564,68 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Download recording locally to user's device
+  const downloadRecordingLocally = useCallback(async (): Promise<boolean> => {
+    try {
+      console.log("[Recording] Downloading recording locally...");
+
+      // Try to get the blob from various sources
+      let blob: Blob | null = null;
+
+      // 1. Check lastBlobRef (from failed upload)
+      if (lastBlobRef.current && lastBlobRef.current.size > 0) {
+        blob = lastBlobRef.current;
+        console.log("[Recording] Using lastBlobRef for download");
+      }
+
+      // 2. Check savedBlobRef
+      if (!blob && savedBlobRef.current && savedBlobRef.current.size > 0) {
+        blob = savedBlobRef.current;
+        console.log("[Recording] Using savedBlobRef for download");
+      }
+
+      // 3. Check IndexedDB
+      if (!blob) {
+        blob = await loadFromIndexedDB();
+        if (blob) console.log("[Recording] Using IndexedDB blob for download");
+      }
+
+      // 4. Stop current recording if still running
+      if (!blob && isActuallyRecordingRef.current) {
+        blob = await stopRecording();
+        console.log("[Recording] Stopped recording for download");
+      }
+
+      if (!blob || blob.size < MIN_BLOB_SIZE) {
+        console.error("[Recording] No valid recording blob found for download");
+        return false;
+      }
+
+      // Generate filename with timestamp
+      const timestamp = new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-")
+        .slice(0, 19);
+      const filename = `interview_recording_${timestamp}.webm`;
+
+      // Trigger browser download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      console.log(`[Recording] Downloaded locally as: ${filename}`);
+      return true;
+    } catch (error) {
+      console.error("[Recording] Failed to download locally:", error);
+      return false;
+    }
+  }, [stopRecording]);
+
   return (
     <RecordingContext.Provider
       value={{
@@ -577,6 +640,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
         cleanup,
         getRecordingBlob,
         retryUpload,
+        downloadRecordingLocally,
       }}
     >
       {children}
