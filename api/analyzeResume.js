@@ -1,4 +1,5 @@
-import { GoogleGenAI } from "@google/genai";
+import { callAI } from "../lib/aiProviders.js";
+import { getAiConfig } from "../lib/aiConfig.js";
 
 // API Key Manager with rotation and fallback
 class APIKeyManager {
@@ -39,11 +40,6 @@ class APIKeyManager {
   }
 }
 
-// Initialize Gemini with retry logic
-const initializeGemini = (apiKey) => {
-  return new GoogleGenAI({ apiKey });
-};
-
 // Determine if error is retryable with another API key
 const isRetryableError = (error) => {
   const errorMessage = error?.message?.toLowerCase() || "";
@@ -64,19 +60,25 @@ const isRetryableError = (error) => {
   return retryablePatterns.some((pattern) => errorMessage.includes(pattern));
 };
 
-// Helper: Clean JSON output from AI (remove markdown code blocks)
+// Helper: Clean JSON output from AI (remove markdown code blocks).
+// Handles either a JSON object or a top-level array — models on OpenRouter sometimes
+// return a bare array when asked for `{ questions: [...] }`.
 const cleanJsonOutput = (text) => {
   if (!text) return "{}";
 
-  // Remove markdown code blocks
-  let cleaned = text.replace(/```(?:json)?\n?/g, "").replace(/```/g, "");
+  let cleaned = text.replace(/```(?:json)?\n?/g, "").replace(/```/g, "").trim();
 
-  // Find the first '{' and last '}' to extract the JSON object
-  const firstOpen = cleaned.indexOf("{");
-  const lastClose = cleaned.lastIndexOf("}");
+  const firstObj = cleaned.indexOf("{");
+  const firstArr = cleaned.indexOf("[");
+  const useArray =
+    firstArr !== -1 && (firstObj === -1 || firstArr < firstObj);
 
-  if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
-    cleaned = cleaned.substring(firstOpen, lastClose + 1);
+  if (useArray) {
+    const lastClose = cleaned.lastIndexOf("]");
+    if (lastClose > firstArr) return cleaned.substring(firstArr, lastClose + 1);
+  } else if (firstObj !== -1) {
+    const lastClose = cleaned.lastIndexOf("}");
+    if (lastClose > firstObj) return cleaned.substring(firstObj, lastClose + 1);
   }
 
   return cleaned;
@@ -145,10 +147,8 @@ async function executeWithRetry(apiKeyManager, operationFn, operationName) {
 }
 
 // Resume analysis with automatic fallback
-async function analyzeResumeWithAI(base64Data, mimeType, apiKeyManager) {
+async function analyzeResumeWithAI(base64Data, mimeType, fileName, apiKeyManager, provider, model, pdfEngine) {
   const analysisOperation = async (apiKey) => {
-    const ai = initializeGemini(apiKey);
-
     const prompt = `You are an expert HR professional and resume analyzer. Analyze this resume document carefully and extract key information.
 
 IMPORTANT: Extract ONLY information that is explicitly present in the resume. Do not infer or assume information.
@@ -185,37 +185,29 @@ Return JSON in this exact format:
 
 Be precise and handle missing information gracefully by using appropriate defaults. DO NOT use Markdown formatting (no \`\`\`json blocks). Return ONLY the raw JSON string.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        {
-          parts: [
-            {
-              inlineData: {
-                data: base64Data,
-                mimeType: mimeType,
-              },
-            },
-            { text: prompt },
-          ],
-        },
-      ],
-      config: {
-        responseMimeType: "application/json",
-        temperature: 0.1,
-        maxOutputTokens: 8192,
-      },
+    const rawText = await callAI(provider, model, {
+      userPrompt: prompt,
+      expectJson: true,
+      temperature: 0.1,
+      maxTokens: 8192,
+      pdfBase64: base64Data,
+      pdfMimeType: mimeType,
+      pdfFileName: fileName,
+      pdfEngine,
+      apiKey,
     });
 
     let analysis;
     try {
-      analysis = JSON.parse(cleanJsonOutput(response.text));
+      analysis = JSON.parse(cleanJsonOutput(rawText));
     } catch (e) {
-      console.error(
-        "Failed to parse Resume Analysis JSON. Raw text:",
-        response.text
-      );
+      console.error("Failed to parse Resume Analysis JSON. Raw text:", rawText);
       throw e;
+    }
+
+    // Surface near-empty responses early — caller usually masks this with default values otherwise.
+    if (!analysis || Object.keys(analysis).length === 0) {
+      console.error("Resume Analysis returned empty/near-empty JSON. Raw text:", rawText?.slice(0, 1000));
     }
 
     // Validate and set defaults
@@ -254,11 +246,11 @@ Be precise and handle missing information gracefully by using appropriate defaul
 async function generateInterviewQuestions(
   resumeData,
   apiKeyManager,
-  customInstructions = null
+  customInstructions = null,
+  provider,
+  model
 ) {
   const questionOperation = async (apiKey) => {
-    const ai = initializeGemini(apiKey);
-
     const customSection =
       customInstructions && customInstructions.trim()
         ? `\nCUSTOM INSTRUCTIONS FOR QUESTION GENERATION:
@@ -335,29 +327,36 @@ Return JSON in this exact format with EXACTLY 10 questions:
 
 Generate exactly 10 questions following this distribution. Make them specific to their actual resume data. DO NOT use Markdown formatting. Return ONLY the raw JSON string.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        temperature: 0.7,
-        maxOutputTokens: 8192,
-      },
+    const rawText = await callAI(provider, model, {
+      userPrompt: prompt,
+      expectJson: true,
+      temperature: 0.7,
+      maxTokens: 8192,
+      apiKey,
     });
 
     let data;
     try {
-      data = JSON.parse(cleanJsonOutput(response.text));
+      data = JSON.parse(cleanJsonOutput(rawText));
     } catch (e) {
-      console.error("Failed to parse Questions JSON. Raw text:", response.text);
+      console.error("Failed to parse Questions JSON. Raw text:", rawText);
       throw e;
     }
 
-    if (!data.questions || !Array.isArray(data.questions)) {
+    // Accept either { questions: [...] } or a bare array — model outputs vary across providers.
+    const rawQuestions = Array.isArray(data)
+      ? data
+      : Array.isArray(data.questions)
+        ? data.questions
+        : null;
+
+    if (!rawQuestions) {
+      console.error("Invalid questions shape. Parsed:", JSON.stringify(data).slice(0, 500));
+      console.error("Raw model text:", rawText?.slice(0, 1000));
       throw new Error("Invalid questions format in AI response");
     }
 
-    const questions = data.questions.map((q, index) => ({
+    const questions = rawQuestions.map((q, index) => ({
       id: q.id || `question_${index + 1}_${Date.now()}`,
       question: q.question,
       answer: "",
@@ -424,57 +423,61 @@ export default async function handler(req, res) {
       });
     }
 
-    // Initialize API Key Manager with all available keys
-    const apiKeys = [
-      process.env.GEMINI_API_KEY_1,
-      process.env.GEMINI_API_KEY_2,
-      process.env.GEMINI_API_KEY_3, // Optional: add more keys if available
-    ].filter(Boolean); // Remove undefined/null keys
+    const aiConfig = await getAiConfig();
 
-    if (apiKeys.length === 0) {
-      console.error("No valid GEMINI_API_KEY found in environment variables");
-      return res.status(500).json({
-        success: false,
-        error: "AI service not configured properly",
-        errorType: "api_auth_error",
-      });
-    }
+    // Provider failover: configured provider runs first; the other is tried only if the first throws.
+    // Keeps admin intent while ensuring the user never sees an error just because one provider is down.
+    const providerOrder = aiConfig.provider === "gemini"
+      ? ["gemini", "openrouter"]
+      : ["openrouter", "gemini"];
 
-    const apiKeyManager = new APIKeyManager(apiKeys);
-    console.log(`Initialized with ${apiKeys.length} API key(s)`);
+    const providerCtx = (provider) => {
+      const keys = provider === "gemini"
+        ? [process.env.GEMINI_API_KEY_1, process.env.GEMINI_API_KEY_2, process.env.GEMINI_API_KEY_3].filter(Boolean)
+        : [process.env.OPENROUTER_API_KEY].filter(Boolean);
+      const model = provider === "gemini" ? aiConfig.geminiModel : aiConfig.openrouterModel;
+      return { provider, model, keys };
+    };
 
-    const customInstructions =
-      process.env.INTERVIEW_CUSTOM_INSTRUCTIONS || null;
+    const tryWithFailover = async (opName, run) => {
+      let lastErr;
+      for (const provider of providerOrder) {
+        const ctx = providerCtx(provider);
+        if (ctx.keys.length === 0) {
+          console.warn(`${opName}: no API keys for ${provider}, skipping`);
+          continue;
+        }
+        try {
+          const manager = new APIKeyManager(ctx.keys);
+          const result = await run(ctx.provider, ctx.model, manager);
+          if (provider !== aiConfig.provider) {
+            console.warn(`${opName}: failed over from ${aiConfig.provider} to ${provider}`);
+          }
+          return { result, usedProvider: ctx.provider, usedModel: ctx.model, usedKeyCount: ctx.keys.length };
+        } catch (err) {
+          lastErr = err;
+          console.error(`${opName} on ${provider} failed:`, err?.message || err);
+        }
+      }
+      throw lastErr || new Error(`${opName}: no providers available`);
+    };
 
-    if (customInstructions) {
-      console.log("Using custom interview instructions from environment");
-    }
+    const customInstructions = process.env.INTERVIEW_CUSTOM_INSTRUCTIONS || null;
+    if (customInstructions) console.log("Using custom interview instructions from environment");
 
-    console.log(
-      `Processing resume: ${fileName} (${Math.round(fileSize / 1024)} KB)`
+    console.log(`Processing resume: ${fileName} (${Math.round(fileSize / 1024)} KB)`);
+    console.log(`Configured provider: ${aiConfig.provider}, model: ${aiConfig.provider === "gemini" ? aiConfig.geminiModel : aiConfig.openrouterModel}`);
+
+    const analysisRun = await tryWithFailover("Resume Analysis", (provider, model, manager) =>
+      analyzeResumeWithAI(fileData, fileType, fileName, manager, provider, model, aiConfig.openrouterPdfEngine)
     );
+    const resumeAnalysis = analysisRun.result;
+    console.log("✓ Resume analysis completed:", resumeAnalysis.skills.length, "skills found");
 
-    // Step 1: Resume analysis with automatic fallback
-    const resumeAnalysis = await analyzeResumeWithAI(
-      fileData,
-      fileType,
-      apiKeyManager
+    const questionsRun = await tryWithFailover("Question Generation", (provider, model, manager) =>
+      generateInterviewQuestions(resumeAnalysis, manager, customInstructions, provider, model)
     );
-    console.log(
-      "✓ Resume analysis completed:",
-      resumeAnalysis.skills.length,
-      "skills found"
-    );
-
-    // Step 2: Question generation with automatic fallback
-    // Reset API key manager for fresh attempt (optional, depends on quota strategy)
-    apiKeyManager.reset();
-
-    const questions = await generateInterviewQuestions(
-      resumeAnalysis,
-      apiKeyManager,
-      customInstructions
-    );
+    const questions = questionsRun.result;
     console.log("✓ Generated exactly", questions.length, "questions");
 
     const totalProcessingTime = Date.now() - startTime;
@@ -486,8 +489,9 @@ export default async function handler(req, res) {
       questions,
       customInstructionsUsed: !!customInstructions,
       processingTimeMs: totalProcessingTime,
-      model: "gemini-2.5-flash",
-      apiKeysUsed: apiKeys.length,
+      provider: questionsRun.usedProvider,
+      model: questionsRun.usedModel,
+      apiKeysUsed: questionsRun.usedKeyCount,
       performance: {
         totalTimeMs: totalProcessingTime,
       },
@@ -555,7 +559,6 @@ export default async function handler(req, res) {
       success: false,
       error: userMessage,
       errorType: errorType,
-      model: "gemini-2.0-flash-lite",
       technicalDetails:
         process.env.NODE_ENV === "development" ? errorMessage : undefined,
     });

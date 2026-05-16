@@ -38,7 +38,6 @@ export default function StepCommentsAndSubmit({
     isUploading,
     retryUpload,
     downloadRecordingLocally,
-    error: recordingError,
     recordingUrl: existingRecordingUrl,
   } = useRecording();
   const { suppressProctoring, resumeProctoring } = useGlobalProctoring();
