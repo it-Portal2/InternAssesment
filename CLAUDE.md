@@ -14,6 +14,7 @@ Single-page intern-application flow with AI resume analysis, generated interview
 
 ```
 api/                    Vercel Node functions (plain .js, not TS). Only file: analyzeResume.js.
+php-backend/            Standalone PHP service mirroring the Vercel function — see "Dual backend" below.
 src/
   App.tsx               Providers (QueryClient → Recording → Proctoring → Router) + Lenis smooth scroll.
   Firebase.ts           Firebase init (Storage, Firestore, Auth). Config is hardcoded — see Gotchas.
@@ -51,6 +52,22 @@ vercel.json             Deploy config. Sets memory/maxDuration for analyzeResume
 - **Don't start recording from multiple places.** `RecordingContext.startRecording` is guarded against double-starts (see recent fix in `StepUploadAndAI`); keep that pattern.
 - **Proctoring state is global**, not per-component. Read/write violations and termination through `useApplicationStore`, not local refs, or the persisted state will desync from UI.
 - **`.env.local` is gitignored but currently contains a live `VERCEL_OIDC_TOKEN`** — never paste its contents into chat, issues, or commit messages.
+
+## Dual backend (Vercel + PHP)
+
+The AI surface has **two** backends that both honour the same `{ fileData, fileName, fileType, fileSize }` → `{ success, resumeAnalysis, questions, … }` contract:
+
+- **Vercel function** (`api/analyzeResume.js`): handles the fast **Gemini** path (~15s). Reads `aiConfig/active` via `firebase-admin` and runs its own Gemini ↔ OpenRouter provider failover. Subject to `vercel.json`'s `maxDuration: 60`.
+- **PHP backend** (`php-backend/index.php`, hosted at `internlink-api.cehpoint.co.in`): handles the slow **OpenRouter** path (~60–180s). No execution-time limit. OpenRouter-only with a hardcoded model fallback (`minimax/minimax-m2.5:free` → `deepseek/deepseek-v4-flash:free`). **Does not read Firestore.**
+
+Frontend ([src/components/steps/FileUpload.tsx](src/components/steps/FileUpload.tsx)) reads `aiConfig/active` client-side via `useActiveProvider()` ([src/lib/aiProvider.ts](src/lib/aiProvider.ts)) and routes per request:
+- `provider === "gemini"` → Vercel first, PHP as fallback.
+- `provider === "openrouter"` → PHP first, Vercel as fallback (Vercel's own failover then ends on Gemini).
+- Firestore read fails → defaults to `"gemini"` (never push a user onto the slow path because of a blip).
+
+`VITE_PHP_API_URL` overrides the PHP endpoint. Editing the PHP backend means editing `php-backend/index.php` — keep its prompts and response shape in sync with `api/analyzeResume.js` whenever you change one.
+
+**Firestore rule prerequisite**: `aiConfig/active` must allow **client-side reads**. The server-side-only `allow read: if false` rule from the original setup will break the client routing — use `allow read: if true; allow write: if request.auth.token.admin == true;` (or similar).
 
 ## Verification
 

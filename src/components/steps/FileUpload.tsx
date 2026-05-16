@@ -7,6 +7,11 @@ import { cn } from "@/lib/utils";
 import { formatSize } from "@/utils/formatSize";
 import { toast } from "sonner";
 import type { AnalysisResult } from "@/types/application";
+import { useActiveProvider } from "@/lib/aiProvider";
+
+const PHP_API_URL =
+  import.meta.env.VITE_PHP_API_URL ||
+  "https://internlink-api.cehpoint.co.in/index.php";
 
 interface FileUploadProps {
   file: File | null;
@@ -24,6 +29,7 @@ export default function FileUpload({
   className,
 }: FileUploadProps) {
   const [processingStep, setProcessingStep] = useState<string>("");
+  const { data: activeProvider = "gemini" } = useActiveProvider();
 
   const getErrorMessage = (errorType: string) => {
     const contactInfo = "careers@cehpoint.co.in or call +91 33690 29331";
@@ -101,21 +107,45 @@ export default function FileUpload({
 
       setProcessingStep("Analyzing resume with AI...");
 
-      const apiUrl =
+      const VERCEL_URL =
         import.meta.env.VITE_ENV === "development"
           ? "http://localhost:3000/api/analyzeResume"
           : "/api/analyzeResume";
 
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileData: base64Data,
-          fileName: selectedFile.name,
-          fileType: selectedFile.type,
-          fileSize: selectedFile.size,
-        }),
+      const body = JSON.stringify({
+        fileData: base64Data,
+        fileName: selectedFile.name,
+        fileType: selectedFile.type,
+        fileSize: selectedFile.size,
       });
+
+      const primaryUrl = activeProvider === "openrouter" ? PHP_API_URL : VERCEL_URL;
+      const fallbackUrl = activeProvider === "openrouter" ? VERCEL_URL : PHP_API_URL;
+
+      let response: Response | null = null;
+      try {
+        response = await fetch(primaryUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+          signal: AbortSignal.timeout(
+            activeProvider === "openrouter" ? 200_000 : 60_000,
+          ),
+        });
+      } catch (e) {
+        console.warn(
+          `Primary backend (${activeProvider}) failed, trying fallback:`,
+          e,
+        );
+      }
+
+      if (!response || !response.ok) {
+        response = await fetch(fallbackUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+        });
+      }
 
       const result = await response.json();
 
