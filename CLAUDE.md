@@ -52,6 +52,33 @@ vercel.json             Deploy config. Sets memory/maxDuration for analyzeResume
 - **Proctoring state is global**, not per-component. Read/write violations and termination through `useApplicationStore`, not local refs, or the persisted state will desync from UI.
 - **`.env.local` is gitignored but currently contains a live `VERCEL_OIDC_TOKEN`** — never paste its contents into chat, issues, or commit messages.
 
+## PHP Backend (Vercel 60s timeout bypass)
+
+The project includes a **PHP backend** at `php-backend/index.php` that mirrors the Vercel serverless function but has **no execution time limit**. Hosted at `https://internlink-api.cehpoint.co.in/index.php`.
+
+### How it works
+
+1. **Frontend** (`FileUpload.tsx`) tries the PHP backend **first** with 120s timeout
+2. If PHP fails → falls back to Vercel `/api/analyzeResume` (serverless, 60s limit)
+3. No code changes needed for the fallback — it happens automatically
+
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `VITE_PHP_API_URL` | No | `https://internlink-api.cehpoint.co.in/index.php` | PHP backend URL (frontend) |
+| `OPENROUTER_API_KEY` | Yes | — | OpenRouter API key (PHP backend) |
+| `PRIMARY_MODEL` | No | `minimax/minimax-m2.5:free` | Primary AI model (PHP backend) |
+| `FALLBACK_MODEL` | No | `deepseek/deepseek-v4-flash:free` | Fallback AI model (PHP backend) |
+
+### PHP Backend Setup
+
+1. Upload `php-backend/index.php` to any PHP hosting (cPanel, shared, VPS)
+2. Set `OPENROUTER_API_KEY` in hosting panel or create `php-backend/.env`
+3. Set `VITE_PHP_API_URL` in Vercel project env (optional — defaults to cehpoint endpoint)
+
+See `php-backend/.env.example` and `.env.example` for all available options.
+
 ## Verification
 
 There is **no test suite** in this project and none is planned — do not add Jest/Vitest/Playwright scaffolding unless explicitly asked. After every change, run in order:

@@ -8,6 +8,8 @@ import { formatSize } from "@/utils/formatSize";
 import { toast } from "sonner";
 import type { AnalysisResult } from "@/types/application";
 
+const PHP_API_URL = import.meta.env.VITE_PHP_API_URL || "https://internlink-api.cehpoint.co.in/index.php";
+
 interface FileUploadProps {
   file: File | null;
   onFileSelect: (file: File | null) => void;
@@ -101,21 +103,40 @@ export default function FileUpload({
 
       setProcessingStep("Analyzing resume with AI...");
 
-      const apiUrl =
-        import.meta.env.VITE_ENV === "development"
-          ? "http://localhost:3000/api/analyzeResume"
-          : "/api/analyzeResume";
-
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileData: base64Data,
-          fileName: selectedFile.name,
-          fileType: selectedFile.type,
-          fileSize: selectedFile.size,
-        }),
+      const body = JSON.stringify({
+        fileData: base64Data,
+        fileName: selectedFile.name,
+        fileType: selectedFile.type,
+        fileSize: selectedFile.size,
       });
+
+      // Try PHP backend first (unlimited execution), fall back to Vercel serverless
+      let response: Response | null = null;
+      if (PHP_API_URL) {
+        try {
+          response = await fetch(PHP_API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+            signal: AbortSignal.timeout(120000),
+          });
+        } catch {
+          console.warn("PHP backend failed, falling back to Vercel serverless");
+        }
+      }
+
+      if (!response || !response.ok) {
+        const fallbackUrl =
+          import.meta.env.VITE_ENV === "development"
+            ? "http://localhost:3000/api/analyzeResume"
+            : "/api/analyzeResume";
+
+        response = await fetch(fallbackUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+        });
+      }
 
       const result = await response.json();
 
