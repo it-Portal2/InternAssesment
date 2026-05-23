@@ -294,8 +294,11 @@ export const useApplicationStore = create<ApplicationState>()(
         ...state,
         // Don't persist the actual File object, just store successful states
         uploadedFile: state.resumeAnalysis ? true : null, // Store boolean flag instead of file
-        // Don't persist rulesAccepted - user must re-accept after refresh for security
+        // Security: these flags must be re-validated on every page load — never trust persisted values
         rulesAccepted: false,
+        isCameraApproved: false,
+        isAllPermissionsApproved: false,
+        currentStep: 1,
       }),
       onRehydrateStorage: () => (state, error) => {
         if (!error && state) {

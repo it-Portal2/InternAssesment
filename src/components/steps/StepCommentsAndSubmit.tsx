@@ -39,6 +39,7 @@ export default function StepCommentsAndSubmit({
     retryUpload,
     downloadRecordingLocally,
     recordingUrl: existingRecordingUrl,
+    getWebcamUrl,
   } = useRecording();
   const { suppressProctoring, resumeProctoring } = useGlobalProctoring();
 
@@ -268,6 +269,7 @@ export default function StepCommentsAndSubmit({
                 summary: "No resume analysis available",
               },
           recordingUrl: recordingUrl,
+          webcamUrl: getWebcamUrl() || "NOT_RECORDED",
           applicationStatus: "Pending",
           createdAt: serverTimestamp(),
         };

@@ -6,11 +6,19 @@ import { BrowserRouter, Routes, Route } from "react-router";
 import NotFound from "@/pages/not-found";
 import { RecordingProvider } from "@/context/RecordingContext";
 import { ProctoringProvider } from "@/context/ProctoringContext";
+import { signInAnonymously } from "firebase/auth";
+import { auth } from "@/Firebase";
 
 import Lenis from "lenis";
 import { useEffect } from "react";
 
 function App() {
+  useEffect(() => {
+    signInAnonymously(auth).catch((err) => {
+      console.error("[Auth] Anonymous sign-in failed:", err);
+    });
+  }, []);
+
   useEffect(() => {
     const lenis = new Lenis({
       duration: 1.5,

@@ -129,22 +129,21 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
     window.location.reload();
   }, [reset, form, cleanup]);
 
-  // Camera/Audio violations are handled by ProctoringMonitor
-  // These feed into global proctoring context via incrementViolation
-  const { incrementViolation } = useApplicationStore();
-
+  // Camera/audio off = immediate termination (no strike budget — these are critical violations)
   const handleCameraViolation = useCallback(
-    (_reason: string) => {
-      incrementViolation();
+    (reason: string) => {
+      setIsTerminated(true, reason);
+      cleanup();
     },
-    [incrementViolation],
+    [setIsTerminated, cleanup],
   );
 
   const handleAudioViolation = useCallback(
-    (_reason: string) => {
-      incrementViolation();
+    (reason: string) => {
+      setIsTerminated(true, reason);
+      cleanup();
     },
-    [incrementViolation],
+    [setIsTerminated, cleanup],
   );
 
   // Note: useProctoring is now called at App level via ProctoringProvider
