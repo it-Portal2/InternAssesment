@@ -10,6 +10,7 @@ import { useProctoring } from "@/hooks/useProctoring";
 import { useApplicationStore } from "@/store/useApplicationStore";
 import { ScreenCheckModal } from "@/components/ScreenCheckModal";
 import WarningModal from "@/components/WarningModal";
+import { debugLog } from "@/lib/debug";
 import { useRecording } from "@/context/RecordingContext";
 import { toast } from "sonner";
 
@@ -70,7 +71,7 @@ export function ProctoringProvider({ children }: { children: ReactNode }) {
 
       // Check if we should terminate
       if (newCount >= maxViolations) {
-        console.log(
+        debugLog(
           `[GlobalProctoring] TERMINATING: ${reason} (Violation ${newCount}/${maxViolations})`,
         );
         setIsTerminated(true, reason);
@@ -82,7 +83,7 @@ export function ProctoringProvider({ children }: { children: ReactNode }) {
       } else {
         setWarningReason(reason);
         setWarningModalOpen(true);
-        console.log(
+        debugLog(
           `[GlobalProctoring] Warning: ${reason} (Violation ${newCount}/${maxViolations})`,
         );
       }

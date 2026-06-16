@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Camera, ShieldAlert, Wifi, VideoOff, Mic, MicOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { debugLog } from "@/lib/debug";
 import { toast } from "sonner";
 
 interface ProctoringMonitorProps {
@@ -94,7 +95,7 @@ export default function ProctoringMonitor({
       // Monitor video track for changes
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
-        console.log("[Proctoring] Camera started, monitoring track...");
+        debugLog("[Proctoring] Camera started, monitoring track...");
 
         videoTrack.onended = () => {
           console.warn("[Proctoring] Video track ended!");
@@ -115,7 +116,7 @@ export default function ProctoringMonitor({
         };
 
         videoTrack.onunmute = () => {
-          console.log("[Proctoring] Video track unmuted");
+          debugLog("[Proctoring] Video track unmuted");
           setCameraActive(true);
           setCameraBlocked(false);
           hasCameraViolation.current = false;
@@ -146,7 +147,7 @@ export default function ProctoringMonitor({
       // Monitor audio track for changes
       const audioTrack = stream.getAudioTracks()[0];
       if (audioTrack) {
-        console.log("[Proctoring] Audio monitoring started...");
+        debugLog("[Proctoring] Audio monitoring started...");
 
         audioTrack.onended = () => {
           console.warn("[Proctoring] Audio track ended!");
@@ -163,7 +164,7 @@ export default function ProctoringMonitor({
         };
 
         audioTrack.onunmute = () => {
-          console.log("[Proctoring] Audio track unmuted");
+          debugLog("[Proctoring] Audio track unmuted");
           setAudioBlocked(false);
           hasAudioViolation.current = false;
         };

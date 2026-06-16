@@ -7,20 +7,39 @@ import {
   useEffect, // Added useEffect
   type ReactNode,
 } from "react";
+import fixWebmDuration from "fix-webm-duration";
 
 const CLOUDINARY_CLOUD_NAME = "duusiq4ws";
 const CLOUDINARY_UPLOAD_PRESET = "InternAssesment";
 const MAX_RECORDING_DURATION_MS = 25 * 60 * 1000; // 25 minutes
-const UPLOAD_TIMEOUT_MS = 2 * 60 * 1000; // 2 minute upload timeout
+const CHUNK_SIZE = 6 * 1024 * 1024; // 6 MB per chunk (Cloudinary requires >5MB except the last)
+const CHUNK_TIMEOUT_MS = 2 * 60 * 1000; // per-chunk upload timeout
 const MIN_BLOB_SIZE = 10000; // 10KB minimum
 const DB_NAME = "InterviewRecordingDB";
 const STORE_NAME = "recordings";
 
+// Verbose recording logs are silenced in production. Flip to true to debug.
+const DEBUG_RECORDING = false;
+const rlog = (...args: unknown[]) => {
+  if (DEBUG_RECORDING) console["log"](...args);
+};
+
+// MediaRecorder timeslice blobs carry no Duration in their EBML header, so a raw
+// download plays only a few seconds. Inject the real duration before saving/uploading.
+async function finalizeWebm(chunks: Blob[], durationMs: number): Promise<Blob> {
+  const raw = new Blob(chunks, { type: "video/webm" });
+  if (!durationMs || durationMs <= 0) return raw;
+  try {
+    return await fixWebmDuration(raw, durationMs, { logger: false });
+  } catch (e) {
+    console.warn("[Recording] Duration fix failed, using raw blob:", e);
+    return raw;
+  }
+}
+
 interface RecordingContextType {
   isRecording: boolean; // UI state - stays true even after silent stop
   recordingUrl: string | null;
-  webcamUrl: string | null; // Dedicated face-only recording URL
-  getWebcamUrl: () => string | null; // Always-current ref read (avoids stale closure)
   error: string | null;
   uploadProgress: number; // 0-100
   isUploading: boolean;
@@ -58,7 +77,7 @@ async function saveToIndexedDB(blob: Blob): Promise<void> {
       const store = tx.objectStore(STORE_NAME);
       store.put(blob, "currentRecording");
       tx.oncomplete = () => {
-        console.log("[Recording] Saved to IndexedDB:", blob.size, "bytes");
+        rlog("[Recording] Saved to IndexedDB:", blob.size, "bytes");
         resolve();
       };
       tx.onerror = () => reject(tx.error);
@@ -91,14 +110,13 @@ async function clearIndexedDB(): Promise<void> {
     const store = tx.objectStore(STORE_NAME);
     store.delete("currentRecording");
   } catch (e) {
-    console.log("[Recording] Failed to clear IndexedDB:", e);
+    rlog("[Recording] Failed to clear IndexedDB:", e);
   }
 }
 
 export function RecordingProvider({ children }: { children: ReactNode }) {
   const [isRecording, setIsRecording] = useState(false); // UI state
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
-  const [webcamUrl, setWebcamUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
@@ -107,12 +125,8 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
   const chunksRef = useRef<Blob[]>([]);
   const screenStreamRef = useRef<MediaStream | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
-  const webcamStreamRef = useRef<MediaStream | null>(null);
-  const webcamRecorderRef = useRef<MediaRecorder | null>(null);
-  const webcamChunksRef = useRef<Blob[]>([]);
-  const webcamSavedBlobRef = useRef<Blob | null>(null);
-  const webcamUrlRef = useRef<string | null>(null); // Ref for always-current access in closures
   const savedBlobRef = useRef<Blob | null>(null); // Saved blob after 25 min
+  const recordingStartRef = useRef<number>(0); // Date.now() when recording started (for duration metadata)
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isActuallyRecordingRef = useRef(false); // Actual recording state
   const isUploadingRef = useRef(false); // Prevent race condition
@@ -120,20 +134,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
 
   // Silent stop - stops MediaRecorder but keeps streams active
   const silentStop = useCallback(async (): Promise<Blob | null> => {
-    console.log("[Recording] Silent stop at 25 min...");
-
-    // Also silently stop webcam recorder and save its blob
-    if (webcamRecorderRef.current?.state === "recording") {
-      webcamRecorderRef.current.onstop = () => {
-        webcamSavedBlobRef.current = new Blob(webcamChunksRef.current, {
-          type: "video/webm",
-        });
-        webcamChunksRef.current = [];
-        webcamRecorderRef.current = null;
-        console.log("[Recording] Webcam silent stop complete");
-      };
-      webcamRecorderRef.current.stop();
-    }
+    rlog("[Recording] Silent stop at 25 min...");
 
     return new Promise((resolve) => {
       const mediaRecorder = mediaRecorderRef.current;
@@ -144,8 +145,11 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
       }
 
       mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: "video/webm" });
-        console.log("[Recording] Silent stop complete, blob size:", blob.size);
+        const durationMs = recordingStartRef.current
+          ? Date.now() - recordingStartRef.current
+          : MAX_RECORDING_DURATION_MS;
+        const blob = await finalizeWebm(chunksRef.current, durationMs);
+        rlog("[Recording] Silent stop complete, blob size:", blob.size);
 
         // Save to IndexedDB as backup
         await saveToIndexedDB(blob);
@@ -165,7 +169,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const cleanup = useCallback(() => {
-    console.log("[Recording] Cleanup called");
+    rlog("[Recording] Cleanup called");
 
     // Clear timer
     if (recordingTimerRef.current) {
@@ -176,7 +180,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
     // Stop all tracks
     if (screenStreamRef.current) {
       screenStreamRef.current.getTracks().forEach((track) => {
-        console.log("[Recording] Stopping track:", track.kind);
+        rlog("[Recording] Stopping track:", track.kind);
         track.stop();
       });
       screenStreamRef.current = null;
@@ -187,32 +191,16 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
       audioStreamRef.current = null;
     }
 
-    if (webcamStreamRef.current) {
-      webcamStreamRef.current.getTracks().forEach((track) => track.stop());
-      webcamStreamRef.current = null;
-    }
-
     // Reset screen recorder
     if (mediaRecorderRef.current?.state !== "inactive") {
       try {
         mediaRecorderRef.current?.stop();
       } catch {
-        console.log("[Recording] Recorder already stopped");
+        rlog("[Recording] Recorder already stopped");
       }
     }
     mediaRecorderRef.current = null;
     chunksRef.current = [];
-
-    // Reset webcam recorder
-    if (webcamRecorderRef.current?.state !== "inactive") {
-      try {
-        webcamRecorderRef.current?.stop();
-      } catch {
-        console.log("[Recording] Webcam recorder already stopped");
-      }
-    }
-    webcamRecorderRef.current = null;
-    webcamChunksRef.current = [];
 
     savedBlobRef.current = null;
     isActuallyRecordingRef.current = false;
@@ -222,7 +210,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
   // Cleanup on unmount - MUST be defined AFTER cleanup fn
   useEffect(() => {
     return () => {
-      console.log("[Recording] Provider unmounting, running cleanup");
+      rlog("[Recording] Provider unmounting, running cleanup");
       cleanup();
     };
   }, [cleanup]);
@@ -231,11 +219,11 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
     async (onScreenShareStop?: () => void): Promise<boolean> => {
       // Prevent multiple starts
       if (isActuallyRecordingRef.current) {
-        console.log("[Recording] Alredy recording, ignoring start request");
+        rlog("[Recording] Alredy recording, ignoring start request");
         return true;
       }
 
-      console.log("[Recording] Starting recording...");
+      rlog("[Recording] Starting recording...");
       setError(null);
       chunksRef.current = [];
       savedBlobRef.current = null;
@@ -246,15 +234,15 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
 
       try {
         // Get audio stream
-        console.log("[Recording] Requesting audio...");
+        rlog("[Recording] Requesting audio...");
         const audioStream = await navigator.mediaDevices.getUserMedia({
           audio: true,
         });
         audioStreamRef.current = audioStream;
-        console.log("[Recording] Audio obtained");
+        rlog("[Recording] Audio obtained");
 
         // Get screen stream with reduced frame rate
-        console.log("[Recording] Requesting screen...");
+        rlog("[Recording] Requesting screen...");
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
           video: {
             displaySurface: "monitor",
@@ -263,7 +251,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
           audio: true,
         });
         screenStreamRef.current = screenStream;
-        console.log("[Recording] Screen obtained");
+        rlog("[Recording] Screen obtained");
 
         // C6: Reject window/tab shares — candidate must share their entire screen
         const displaySurface = (
@@ -304,12 +292,12 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
           "video/webm",
         ].find((type) => MediaRecorder.isTypeSupported(type));
 
-        console.log("[Recording] Using codec:", mimeType);
+        rlog("[Recording] Using codec:", mimeType);
 
         // Create recorder with REDUCED bitrate for 25 min @ 100MB
         const mediaRecorder = new MediaRecorder(combinedStream, {
           mimeType,
-          videoBitsPerSecond: 600000, // 600 kbps
+          videoBitsPerSecond: 500000, // 500 kbps
           audioBitsPerSecond: 64000, // 64 kbps
         });
 
@@ -319,7 +307,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
         mediaRecorder.ondataavailable = (event) => {
           if (event.data && event.data.size > 0) {
             chunksRef.current.push(event.data);
-            console.log(
+            rlog(
               "[Recording] Chunk received:",
               event.data.size,
               "bytes",
@@ -334,7 +322,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
 
         // Handle user stopping screen share - VIOLATION
         screenStream.getVideoTracks()[0].onended = () => {
-          console.log("[Recording] Screen share ended by user - VIOLATION");
+          rlog("[Recording] Screen share ended by user - VIOLATION");
           if (mediaRecorderRef.current?.state === "recording") {
             mediaRecorderRef.current.stop();
           }
@@ -349,7 +337,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
         const micTrack = audioStream.getAudioTracks()[0];
         if (micTrack) {
           micTrack.onended = () => {
-            console.log("[Recording] Microphone ended by user - VIOLATION");
+            rlog("[Recording] Microphone ended by user - VIOLATION");
             setError("Microphone was turned off. This is a violation.");
             if (onScreenShareStop) {
               onScreenShareStop(); // Reuse callback for audio violation too
@@ -357,7 +345,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
           };
 
           micTrack.onmute = () => {
-            console.log("[Recording] Microphone muted - VIOLATION");
+            rlog("[Recording] Microphone muted - VIOLATION");
             setError("Microphone was muted. This is a violation.");
             if (onScreenShareStop) {
               onScreenShareStop();
@@ -365,59 +353,24 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
           };
 
           micTrack.onunmute = () => {
-            console.log("[Recording] Microphone unmuted");
+            rlog("[Recording] Microphone unmuted");
             setError(null);
           };
         }
 
         // Set 25-minute timer for silent stop
         recordingTimerRef.current = setTimeout(() => {
-          console.log("[Recording] 25 min reached, triggering silent stop");
+          rlog("[Recording] 25 min reached, triggering silent stop");
           silentStop();
         }, MAX_RECORDING_DURATION_MS);
 
-        // Start screen recording with chunks every 5 seconds
+        // Start screen recording with chunks every 5 seconds.
+        // The candidate's webcam is shown by the on-screen ProctoringMonitor overlay,
+        // which the screen capture records — so the face is already in this recording.
         mediaRecorder.start(5000);
+        recordingStartRef.current = Date.now();
         setIsRecording(true);
-        console.log("[Recording] Started successfully");
-
-        // Start dedicated webcam-only recording (parallel, non-blocking)
-        // Gives reviewers a face-only track separate from the screen recording
-        try {
-          const webcamStream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              width: { ideal: 320 },
-              height: { ideal: 240 },
-              frameRate: { ideal: 10, max: 15 },
-            },
-            audio: false,
-          });
-          webcamStreamRef.current = webcamStream;
-
-          const webcamMimeType = [
-            "video/webm;codecs=vp9",
-            "video/webm;codecs=vp8",
-            "video/webm",
-          ].find((t) => MediaRecorder.isTypeSupported(t));
-
-          const webcamRecorder = new MediaRecorder(
-            new MediaStream(webcamStream.getVideoTracks()),
-            { mimeType: webcamMimeType, videoBitsPerSecond: 300_000 },
-          );
-          webcamRecorderRef.current = webcamRecorder;
-          webcamChunksRef.current = [];
-
-          webcamRecorder.ondataavailable = (e) => {
-            if (e.data && e.data.size > 0) webcamChunksRef.current.push(e.data);
-          };
-
-          webcamRecorder.start(5000);
-          console.log("[Recording] Dedicated webcam recording started");
-        } catch {
-          console.warn(
-            "[Recording] Webcam unavailable — proceeding without dedicated webcam recording",
-          );
-        }
+        rlog("[Recording] Started successfully");
 
         return true;
       } catch (err) {
@@ -433,7 +386,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
   );
 
   const stopRecording = useCallback(async (): Promise<Blob | null> => {
-    console.log("[Recording] Stopping recording...");
+    rlog("[Recording] Stopping recording...");
 
     // Clear timer if still running
     if (recordingTimerRef.current) {
@@ -445,16 +398,20 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
       const mediaRecorder = mediaRecorderRef.current;
 
       if (!mediaRecorder || mediaRecorder.state === "inactive") {
-        console.log("[Recording] No active recorder");
+        rlog("[Recording] No active recorder");
         cleanup();
         resolve(null);
         return;
       }
 
-      mediaRecorder.onstop = () => {
-        console.log("[Recording] Stopped, chunks:", chunksRef.current.length);
-        const blob = new Blob(chunksRef.current, { type: "video/webm" });
-        console.log("[Recording] Blob size:", blob.size, "bytes");
+      mediaRecorder.onstop = async () => {
+        rlog("[Recording] Stopped, chunks:", chunksRef.current.length);
+        const durationMs = recordingStartRef.current
+          ? Date.now() - recordingStartRef.current
+          : 0;
+        // Build + duration-fix the blob BEFORE cleanup (cleanup clears chunksRef)
+        const blob = await finalizeWebm(chunksRef.current, durationMs);
+        rlog("[Recording] Blob size:", blob.size, "bytes");
         cleanup();
         resolve(blob);
       };
@@ -467,14 +424,14 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
   const getRecordingBlob = useCallback(async (): Promise<Blob | null> => {
     // First check if we have a saved blob (from 25-min silent stop)
     if (savedBlobRef.current && savedBlobRef.current.size > 0) {
-      console.log("[Recording] Using saved blob from 25-min stop");
+      rlog("[Recording] Using saved blob from 25-min stop");
       return savedBlobRef.current;
     }
 
     // Check IndexedDB backup
     const indexedDBBlob = await loadFromIndexedDB();
     if (indexedDBBlob && indexedDBBlob.size > 0) {
-      console.log("[Recording] Using blob from IndexedDB");
+      rlog("[Recording] Using blob from IndexedDB");
       return indexedDBBlob;
     }
 
@@ -486,116 +443,128 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
     return null;
   }, [stopRecording]);
 
-  // Upload with timeout and progress.
-  // isMainRecording=true  → updates progress bar, sets recordingUrl state, clears IndexedDB, reports errors.
-  // isMainRecording=false → silent webcam upload; none of those side-effects.
-  const uploadToCloudinary = async (
-    blob: Blob,
-    options: { isMainRecording?: boolean } = {},
-  ): Promise<string | null> => {
-    const isMainRecording = options.isMainRecording ?? true;
-    const MAX_RETRIES = isMainRecording ? 5 : 2;
-    const uploadTimeout = isMainRecording ? UPLOAD_TIMEOUT_MS : 60_000;
-
-    console.log(`[Recording] Uploading ${isMainRecording ? "screen" : "webcam"} to Cloudinary, size:`, blob.size);
+  // Chunked (resumable) upload to Cloudinary.
+  // The file is sent in 6MB chunks; a failed chunk retries on its own without
+  // restarting the whole upload, so large videos finish reliably on slow links.
+  const uploadToCloudinary = async (blob: Blob): Promise<string | null> => {
+    rlog(
+      "[Recording] Uploading recording to Cloudinary (chunked), size:",
+      blob.size,
+    );
 
     // Validate blob size
     if (blob.size < MIN_BLOB_SIZE) {
       console.error("[Recording] Blob too small:", blob.size);
-      if (isMainRecording) setError("Recording is too short or empty. Please try again.");
+      setError("Recording is too short or empty. Please try again.");
       return null;
     }
 
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        // Try signed upload first (more secure); fall back to unsigned if signing unavailable
+    // Unsigned upload with the account's upload preset — proven to work with the
+    // duusiq4ws cloud. (Signed uploads need a valid api_key/secret for THIS cloud;
+    // re-enable them only once those credentials are confirmed correct.)
+    const uploadParams: Record<string, string> = {
+      upload_preset: CLOUDINARY_UPLOAD_PRESET,
+    };
+
+    const total = blob.size;
+    const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`; // unique per file, same for all chunks
+    const uploadUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`;
+
+    // Upload one chunk. Resolves with the parsed response (final chunk carries secure_url).
+    const uploadChunk = (
+      chunkBlob: Blob,
+      start: number,
+      end: number,
+    ): Promise<Record<string, unknown>> => {
+      return new Promise((resolve, reject) => {
         const formData = new FormData();
-        formData.append("file", blob);
+        formData.append("file", chunkBlob);
         formData.append("resource_type", "video");
+        for (const [k, v] of Object.entries(uploadParams)) formData.append(k, v);
 
-        try {
-          const signResp = await fetch("/api/signCloudinaryUpload", {
-            method: "POST",
-            signal: AbortSignal.timeout(8000),
-          });
-          if (signResp.ok) {
-            const { signature, timestamp, api_key, upload_preset } =
-              await signResp.json();
-            formData.append("signature", signature);
-            formData.append("timestamp", String(timestamp));
-            formData.append("api_key", api_key);
-            formData.append("upload_preset", upload_preset);
-            console.log("[Recording] Using signed Cloudinary upload");
+        const xhr = new XMLHttpRequest();
+        xhr.timeout = CHUNK_TIMEOUT_MS;
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percent = Math.round(((start + event.loaded) / total) * 100);
+            setUploadProgress(Math.min(percent, 100));
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              resolve(xhr.responseText ? JSON.parse(xhr.responseText) : {});
+            } catch {
+              reject(new Error("Invalid response from server"));
+            }
           } else {
-            throw new Error("Signing endpoint returned non-OK");
+            reject(
+              new Error(
+                `Chunk upload failed: ${xhr.status} ${xhr.responseText?.slice(0, 200) || ""}`,
+              ),
+            );
           }
-        } catch {
-          // Signing endpoint unavailable — fall back to unsigned preset
-          formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-          console.warn("[Recording] Signing unavailable — using unsigned upload");
-        }
+        };
 
-        // Use XMLHttpRequest for progress tracking
-        const url = await new Promise<string | null>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
+        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.ontimeout = () => reject(new Error("Chunk upload timed out"));
 
-          // Set timeout
-          xhr.timeout = uploadTimeout;
+        xhr.open("POST", uploadUrl);
+        // Cloudinary chunked-upload headers (must be set after open, before send)
+        xhr.setRequestHeader("X-Unique-Upload-Id", uploadId);
+        xhr.setRequestHeader("Content-Range", `bytes ${start}-${end}/${total}`);
+        xhr.send(formData);
+      });
+    };
 
-          xhr.upload.onprogress = (event) => {
-            if (event.lengthComputable && isMainRecording) {
-              const percent = Math.round((event.loaded / event.total) * 100);
-              setUploadProgress(percent);
-              console.log(`[Recording] Upload progress: ${percent}%`);
-            }
-          };
+    const CHUNK_RETRIES = 3;
+    let secureUrl: string | null = null;
 
-          xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              try {
-                const data = JSON.parse(xhr.responseText);
-                resolve(data.secure_url);
-              } catch {
-                reject(new Error("Invalid response from server"));
-              }
-            } else {
-              reject(new Error(`Upload failed: ${xhr.status}`));
-            }
-          };
+    for (let start = 0; start < total; start += CHUNK_SIZE) {
+      const end = Math.min(start + CHUNK_SIZE, total) - 1; // inclusive byte index
+      const chunkBlob = blob.slice(start, end + 1);
 
-          xhr.onerror = () => reject(new Error("Network error"));
-          xhr.ontimeout = () => reject(new Error("Upload timed out (2 min)"));
-
-          xhr.open(
-            "POST",
-            `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`,
+      let chunkOk = false;
+      for (let attempt = 1; attempt <= CHUNK_RETRIES; attempt++) {
+        try {
+          const resp = await uploadChunk(chunkBlob, start, end);
+          if (resp && typeof resp.secure_url === "string") {
+            secureUrl = resp.secure_url as string;
+          }
+          chunkOk = true;
+          break;
+        } catch (err) {
+          console.error(
+            `[Recording] Chunk ${start}-${end} attempt ${attempt}/${CHUNK_RETRIES} failed:`,
+            err,
           );
-          xhr.send(formData);
-        });
-
-        if (url) {
-          console.log(`[Recording] ${isMainRecording ? "Screen" : "Webcam"} upload success:`, url);
-          if (isMainRecording) {
-            setRecordingUrl(url);
-            setUploadProgress(100);
-            await clearIndexedDB();
+          if (attempt < CHUNK_RETRIES) {
+            await new Promise((r) => setTimeout(r, 2000 * attempt)); // 2s, 4s
           }
-          return url;
         }
-      } catch (err) {
-        console.error(`[Recording] Upload attempt ${attempt} failed:`, err);
-        if (isMainRecording) setUploadProgress(0);
+      }
 
-        if (attempt < MAX_RETRIES) {
-          // Exponential backoff: 2s, 4s, 8s, 16s
-          const delay = 2000 * Math.pow(2, attempt - 1);
-          console.log(`[Recording] Retrying in ${delay}ms...`);
-          await new Promise((r) => setTimeout(r, delay));
-        }
+      // A chunk that exhausts its retries fails the whole upload; the outer
+      // fallback (retry / local download / UPLOAD_FAILED) then takes over.
+      if (!chunkOk) {
+        setUploadProgress(0);
+        setError("Failed to upload recording. Please retry or use the download option.");
+        return null;
       }
     }
 
-    if (isMainRecording) setError(`Failed to upload recording after ${MAX_RETRIES} attempts`);
+    if (secureUrl) {
+      rlog("[Recording] Recording upload success:", secureUrl);
+      setRecordingUrl(secureUrl);
+      setUploadProgress(100);
+      await clearIndexedDB();
+      return secureUrl;
+    }
+
+    // All chunks sent but Cloudinary never returned a URL — treat as failure.
+    setError("Upload finished but no URL was returned. Please retry.");
     return null;
   };
 
@@ -603,7 +572,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
     // If upload already in progress, wait and return the result
     // instead of returning null (which would show "upload failed")
     if (isUploadingRef.current) {
-      console.log("[Recording] Upload already in progress, waiting...");
+      rlog("[Recording] Upload already in progress, waiting...");
       // Wait for current upload to finish (poll every 500ms, max 3 min)
       for (let i = 0; i < 360; i++) {
         await new Promise((r) => setTimeout(r, 500));
@@ -611,7 +580,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
           return recordingUrl;
         }
       }
-      console.log("[Recording] Timed out waiting for upload");
+      rlog("[Recording] Timed out waiting for upload");
       return recordingUrl;
     }
 
@@ -619,41 +588,14 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
     setIsUploading(true);
     setUploadProgress(0);
     setError(null);
-    console.log("[Recording] Stop and upload...");
+    rlog("[Recording] Stop and upload...");
 
     try {
-      // --- STEP 1: Collect webcam blob BEFORE getRecordingBlob (which may call cleanup internally) ---
-      let webcamBlob: Blob | null = null;
-
-      if (webcamSavedBlobRef.current && webcamSavedBlobRef.current.size > 0) {
-        // Already saved by 25-min silentStop
-        webcamBlob = webcamSavedBlobRef.current;
-        console.log("[Recording] Using saved webcam blob from silentStop:", webcamBlob.size);
-      } else if (webcamRecorderRef.current?.state === "recording") {
-        // Webcam still recording — stop it and await the blob
-        webcamBlob = await new Promise<Blob | null>((resolve) => {
-          const rec = webcamRecorderRef.current!;
-          rec.onstop = () => {
-            const b = new Blob(webcamChunksRef.current, { type: "video/webm" });
-            webcamChunksRef.current = [];
-            webcamRecorderRef.current = null;
-            resolve(b.size > 0 ? b : null);
-          };
-          try { rec.stop(); } catch { resolve(null); }
-        });
-        console.log("[Recording] Collected webcam blob:", webcamBlob?.size ?? 0);
-      } else if (webcamChunksRef.current.length > 0) {
-        // Recorder already stopped but chunks still in memory (e.g. inactive state)
-        webcamBlob = new Blob(webcamChunksRef.current, { type: "video/webm" });
-        webcamChunksRef.current = [];
-        console.log("[Recording] Collected webcam chunks blob:", webcamBlob.size);
-      }
-
-      // --- STEP 2: Get screen recording blob (may call cleanup internally via stopRecording) ---
+      // Get screen recording blob (may call cleanup internally via stopRecording)
       const blob = await getRecordingBlob();
 
       if (!blob || blob.size === 0) {
-        console.log("[Recording] No blob to upload");
+        rlog("[Recording] No blob to upload");
         setError("No recording found. Please try again.");
         cleanup();
         return null;
@@ -662,32 +604,11 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
       // Save blob for potential retry
       lastBlobRef.current = blob;
 
-      // --- STEP 3: Cleanup remaining streams (webcam already handled above) ---
+      // Cleanup streams now that we have the blob
       cleanup();
 
-      // --- STEP 4: Upload screen recording (primary, shows progress bar) ---
-      const url = await uploadToCloudinary(blob, { isMainRecording: true });
-
-      // --- STEP 5: Upload webcam recording silently (secondary; failure never blocks submission) ---
-      if (webcamBlob && webcamBlob.size >= MIN_BLOB_SIZE) {
-        console.log("[Recording] Uploading webcam recording silently...");
-        try {
-          const wUrl = await uploadToCloudinary(webcamBlob, { isMainRecording: false });
-          if (wUrl) {
-            webcamUrlRef.current = wUrl; // Update ref immediately (readable by stale closures)
-            setWebcamUrl(wUrl);
-            console.log("[Recording] Webcam URL saved:", wUrl);
-          } else {
-            console.warn("[Recording] Webcam upload returned null — non-blocking");
-          }
-        } catch (err) {
-          console.warn("[Recording] Webcam upload error (non-blocking):", err);
-        }
-      } else {
-        console.warn("[Recording] No valid webcam blob to upload (size:", webcamBlob?.size ?? 0, ")");
-      }
-
-      return url;
+      // Upload the screen recording (which already contains the webcam overlay)
+      return await uploadToCloudinary(blob);
     } finally {
       isUploadingRef.current = false;
       setIsUploading(false);
@@ -697,7 +618,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
   // Retry upload with previously saved blob
   const retryUpload = useCallback(async (): Promise<string | null> => {
     if (isUploadingRef.current) {
-      console.log("[Recording] Upload already in progress");
+      rlog("[Recording] Upload already in progress");
       return null;
     }
 
@@ -733,7 +654,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
   // Download recording locally to user's device
   const downloadRecordingLocally = useCallback(async (): Promise<boolean> => {
     try {
-      console.log("[Recording] Downloading recording locally...");
+      rlog("[Recording] Downloading recording locally...");
 
       // Try to get the blob from various sources
       let blob: Blob | null = null;
@@ -741,25 +662,25 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
       // 1. Check lastBlobRef (from failed upload)
       if (lastBlobRef.current && lastBlobRef.current.size > 0) {
         blob = lastBlobRef.current;
-        console.log("[Recording] Using lastBlobRef for download");
+        rlog("[Recording] Using lastBlobRef for download");
       }
 
       // 2. Check savedBlobRef
       if (!blob && savedBlobRef.current && savedBlobRef.current.size > 0) {
         blob = savedBlobRef.current;
-        console.log("[Recording] Using savedBlobRef for download");
+        rlog("[Recording] Using savedBlobRef for download");
       }
 
       // 3. Check IndexedDB
       if (!blob) {
         blob = await loadFromIndexedDB();
-        if (blob) console.log("[Recording] Using IndexedDB blob for download");
+        if (blob) rlog("[Recording] Using IndexedDB blob for download");
       }
 
       // 4. Stop current recording if still running
       if (!blob && isActuallyRecordingRef.current) {
         blob = await stopRecording();
-        console.log("[Recording] Stopped recording for download");
+        rlog("[Recording] Stopped recording for download");
       }
 
       if (!blob || blob.size < MIN_BLOB_SIZE) {
@@ -784,7 +705,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      console.log(`[Recording] Downloaded locally as: ${filename}`);
+      rlog(`[Recording] Downloaded locally as: ${filename}`);
       return true;
     } catch (error) {
       console.error("[Recording] Failed to download locally:", error);
@@ -797,8 +718,6 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
       value={{
         isRecording,
         recordingUrl,
-        webcamUrl,
-        getWebcamUrl: () => webcamUrlRef.current,
         error,
         uploadProgress,
         isUploading,

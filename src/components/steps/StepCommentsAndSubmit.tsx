@@ -18,6 +18,7 @@ import { useApplicationStore } from "@/store/useApplicationStore";
 import { useRecording } from "@/context/RecordingContext";
 import { useGlobalProctoring } from "@/context/ProctoringContext";
 import { db } from "@/Firebase";
+import { debugLog } from "@/lib/debug";
 
 interface StepCommentsAndSubmitProps {
   form: UseFormReturn<InsertApplicationForm>;
@@ -39,7 +40,6 @@ export default function StepCommentsAndSubmit({
     retryUpload,
     downloadRecordingLocally,
     recordingUrl: existingRecordingUrl,
-    getWebcamUrl,
   } = useRecording();
   const { suppressProctoring, resumeProctoring } = useGlobalProctoring();
 
@@ -71,7 +71,7 @@ export default function StepCommentsAndSubmit({
     setUploadFailed(false);
     setFirestoreFailed(false);
     setPendingData(data);
-    console.log("[Submit] Starting submission...");
+    debugLog("[Submit] Starting submission...");
 
     try {
       // Check if we already have a recording URL (from previous failed Firestore attempt)
@@ -79,13 +79,13 @@ export default function StepCommentsAndSubmit({
 
       if (!recordingUrl) {
         // Recording is MANDATORY - upload if not already done
-        console.log("[Submit] Stopping and uploading recording...");
+        debugLog("[Submit] Stopping and uploading recording...");
         toast.info("Uploading your interview recording...", {
           duration: 10000,
         });
 
         recordingUrl = await stopAndUpload();
-        console.log("[Submit] Recording URL:", recordingUrl);
+        debugLog("[Submit] Recording URL:", recordingUrl);
 
         // BLOCK submission if no recording
         if (!recordingUrl) {
@@ -103,7 +103,7 @@ export default function StepCommentsAndSubmit({
         localStorage.setItem("pendingRecordingUrl", recordingUrl);
         setSavedRecordingUrl(recordingUrl);
       } else {
-        console.log("[Submit] Using existing recording URL:", recordingUrl);
+        debugLog("[Submit] Using existing recording URL:", recordingUrl);
         toast.info("Recording already uploaded, submitting to server...", {
           duration: 3000,
         });
@@ -269,12 +269,11 @@ export default function StepCommentsAndSubmit({
                 summary: "No resume analysis available",
               },
           recordingUrl: recordingUrl,
-          webcamUrl: getWebcamUrl() || "NOT_RECORDED",
           applicationStatus: "Pending",
           createdAt: serverTimestamp(),
         };
 
-        console.log(
+        debugLog(
           `[Submit] Firestore attempt ${attempt}/${MAX_FIRESTORE_RETRIES}...`,
         );
         const docRef = await addDoc(
@@ -282,7 +281,7 @@ export default function StepCommentsAndSubmit({
           applicationData,
         );
 
-        console.log("[Submit] Success! Doc ID:", docRef.id);
+        debugLog("[Submit] Success! Doc ID:", docRef.id);
         toast.success("Application submitted successfully!", {
           description: `Application ID: ${docRef.id}. We'll review your application and get back to you soon.`,
           duration: 6000,
@@ -314,7 +313,7 @@ export default function StepCommentsAndSubmit({
         if (attempt < MAX_FIRESTORE_RETRIES) {
           // Wait before retrying (2s, 4s)
           const delay = 2000 * attempt;
-          console.log(`[Submit] Retrying Firestore in ${delay}ms...`);
+          debugLog(`[Submit] Retrying Firestore in ${delay}ms...`);
           toast.warning(
             `Server error, retrying... (${attempt}/${MAX_FIRESTORE_RETRIES})`,
             { duration: 2000 },

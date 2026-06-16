@@ -17,6 +17,7 @@ import ProctoringMonitor from "../ProctoringMonitor";
 import WarningModal from "../WarningModal";
 import { useGlobalProctoring } from "@/context/ProctoringContext";
 import { useRecording } from "@/context/RecordingContext";
+import { debugLog } from "@/lib/debug";
 import { useCallback, useState, useEffect, useRef } from "react";
 
 interface StepUploadAndAIProps {
@@ -55,7 +56,7 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
 
   // Handle screen share being stopped - IMMEDIATE TERMINATION
   const handleScreenShareStopped = useCallback(() => {
-    console.log("[StepUploadAndAI] Screen share stopped - TERMINATING EXAM");
+    debugLog("[StepUploadAndAI] Screen share stopped - TERMINATING EXAM");
     setScreenShareStopped(true);
     cleanupRef.current(); // Use ref to get latest cleanup
 
@@ -75,7 +76,7 @@ export default function StepUploadAndAI({ form }: StepUploadAndAIProps) {
   }, [setIsTerminated]); // setIsTerminated is stable from Zustand
 
   const initRecording = useCallback(async () => {
-    console.log("[StepUploadAndAI] Starting recording...");
+    debugLog("[StepUploadAndAI] Starting recording...");
     setRecordingFailed(false);
     setScreenShareStopped(false);
 

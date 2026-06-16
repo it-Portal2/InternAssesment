@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { checkMultipleScreens } from "@/utils/screenDetection";
+import { debugLog } from "@/lib/debug";
 
 interface UseProctoringProps {
   isActive: boolean;
@@ -39,13 +40,13 @@ export const useProctoring = ({
 
       // Skip if externally suppressed (e.g. during file download dialog)
       if (suppressRef?.current) {
-        console.log("[Proctoring] Ignoring violation (suppressed):", reason);
+        debugLog("[Proctoring] Ignoring violation (suppressed):", reason);
         return;
       }
 
       // Skip violations during initialization grace period
       if (isInitializing.current) {
-        console.log(
+        debugLog(
           "[Proctoring] Ignoring violation during grace period:",
           reason,
         );
@@ -75,11 +76,11 @@ export const useProctoring = ({
   useEffect(() => {
     if (isActive) {
       isInitializing.current = true;
-      console.log("[Proctoring] Starting with 3-second grace period...");
+      debugLog("[Proctoring] Starting with 3-second grace period...");
 
       const timer = setTimeout(() => {
         isInitializing.current = false;
-        console.log("[Proctoring] Grace period ended - violations now active");
+        debugLog("[Proctoring] Grace period ended - violations now active");
         toast.info("Proctoring active", {
           description: "Your session is now being monitored.",
           duration: 2000,
