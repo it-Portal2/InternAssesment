@@ -9,7 +9,6 @@
     }
   ],
   "compilerOptions": {
-    "baseUrl": ".",
     "types": ["dom-speech-recognition"],
     "paths": {
       "@/*": ["./src/*"]
